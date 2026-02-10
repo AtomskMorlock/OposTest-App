@@ -300,15 +300,39 @@ function formatTime(sec) {
 // =======================
 function extractTemaNumber(temaStr) {
   if (!temaStr) return null;
-  const m = String(temaStr).match(/tema\s+(\d+)/i);
-  if (!m) return null;
-  return parseInt(m[1], 10);
+  const s = String(temaStr).trim();
+  // Caso "1", "11", etc.
+  const mNum = s.match(/^(\d+)$/);
+  if (mNum) return parseInt(mNum[1], 10);
+  // Caso "Tema 1", "tema 11", etc.
+  const mTema = s.match(/tema\s+(\d+)/i);
+  if (mTema) return parseInt(mTema[1], 10);
+  return null;
 }
 function compareTemasNatural(a, b) {
   const na = extractTemaNumber(a);
   const nb = extractTemaNumber(b);
   if (na !== null && nb !== null) return na - nb;
-  return String(a).localeCompare(String(b), "es", { sensitivity: "base" });
+  return String(a).localeCompare(String(b), "es", { sensitivity: "base", numeric: true });
+}
+
+function normalizeTemaKey(temaStr) {
+  if (!temaStr) return "";
+  const s = String(temaStr).trim();
+  const n = extractTemaNumber(s);
+  if (n !== null) return String(n);
+  return s.replace(/\s+/g, " ").toLowerCase();
+}
+
+function formatTemaDisplay(temaStr) {
+  if (!temaStr) return "Sin tema";
+  const s = String(temaStr).trim();
+  // Normaliza "1. ..." a "1. ..." (EM SPACE)
+  const m = s.match(/^(\d+)\.\s*(.+)$/);
+  if (m) {
+    return `${m[1]}. \u2003${m[2].trim()}`;
+  }
+  return s;
 }
 
 // =======================
@@ -600,6 +624,7 @@ function showMainMenu() {
     extraBox.style.marginTop = "12px";
     mainMenu.appendChild(extraBox);
   }
+  const topExtra = document.getElementById("main-top-extra");
 
   // Limpieza y cálculo de pendientes reales
   prunePendingGhostIds();
@@ -618,27 +643,48 @@ function showMainMenu() {
   const hist = lsGetJSON(LS_HISTORY, []);
   const last = hist.length ? hist[hist.length - 1] : null;
 
-  extraBox.innerHTML = `
-    <hr>
-    <div class="row">
+  if (topExtra) {
+    topExtra.innerHTML = `
       ${paused ? `<button id="btn-continue-paused" class="secondary">Continuar test pausado</button>` : ""}
       <button id="btn-review" class="secondary">Repasar pendientes (${pendingCount})</button>
       <button id="btn-exam" class="secondary">Modo examen</button>
       <button id="btn-perfection" class="secondary">Perfeccionamiento</button>
+    `;
+  }
+
+  extraBox.innerHTML = `
+    <div class="row" id="main-row-1">
       <button id="btn-bank" class="secondary">Banco de preguntas</button>
+    </div>
+    <div class="row" id="main-row-2">
       <button id="btn-trash" class="secondary">Papelera</button>
       <button id="btn-backup-export" class="secondary">Exportar backup</button>
       <button id="btn-backup-import" class="secondary">Importar backup</button>
+    </div>
+    <div class="row" id="main-row-3">
       <button id="btn-reset-stats" class="danger">Resetear estadísticas</button>
     </div>
+    <div class="small" id="main-db-pill" style="margin-top:8px;"></div>
     ${
       last
-        ? `<div class="small" style="margin-top:10px;">
+        ? `<div class="small" style="margin-top:6px;">
             <strong>Último test:</strong> ${escapeHtml(last.mode)} · ${last.correct}/${last.total} · ${new Date(last.date).toLocaleString("es-ES")}
            </div>`
         : ""
     }
   `;
+
+  const row1 = document.getElementById("main-row-1");
+  if (row1) {
+    if (openImportBtn) row1.appendChild(openImportBtn);
+    if (exportJsonBtn) row1.appendChild(exportJsonBtn);
+  }
+
+  const dbPillTarget = document.getElementById("main-db-pill");
+  if (dbPillTarget && dbCountPill) {
+    dbPillTarget.innerHTML = "";
+    dbPillTarget.appendChild(dbCountPill);
+  }
 
   if (paused) {
     document.getElementById("btn-continue-paused").onclick = () => resumePausedTest();
@@ -887,13 +933,23 @@ function groupTemasByBloque() {
   for (const q of questions) {
     const bloque = q.bloque || "Sin bloque";
     const tema = q.tema || "Sin tema";
-    if (!map.has(bloque)) map.set(bloque, new Set());
-    map.get(bloque).add(tema);
+    const temaKey = normalizeTemaKey(tema);
+    if (!map.has(bloque)) map.set(bloque, new Map());
+    const temasMap = map.get(bloque);
+    if (!temasMap.has(temaKey)) {
+      temasMap.set(temaKey, tema);
+    } else {
+      const existing = temasMap.get(temaKey);
+      const newClean = String(tema).trim().replace(/\s+/g, " ");
+      const oldClean = String(existing).trim().replace(/\s+/g, " ");
+      // Preferir versión más corta (menos espacios / texto)
+      if (newClean.length < oldClean.length) temasMap.set(temaKey, tema);
+    }
   }
   const bloques = Array.from(map.keys()).sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
   return bloques.map(b => ({
     bloque: b,
-    temas: Array.from(map.get(b)).sort(compareTemasNatural)
+    temas: Array.from(map.get(b).values()).sort(compareTemasNatural)
   }));
 }
 
@@ -912,6 +968,11 @@ function showTemaSelectionScreen(targetMode) {
     <div id="tema-select-wrap"></div>
 
     <div style="margin:12px 0;">
+      <div style="font-weight:700;margin-bottom:6px;">Filtrar por fuente</div>
+      <div id="fuente-select-wrap" class="small"></div>
+    </div>
+
+    <div style="margin:12px 0;">
       <label style="display:block;margin:8px 0;">
         <input type="checkbox" id="less-used-checkbox">
         Solo preguntas menos usadas
@@ -921,6 +982,7 @@ function showTemaSelectionScreen(targetMode) {
         <input type="checkbox" id="all-questions-checkbox">
         Todas las preguntas (ignora selección)
       </label>
+      <button id="btn-clear-selection" class="secondary" style="margin:6px 0 10px 0;">Desmarcar todas</button>
 
       <label style="display:block;margin:8px 0;">
         Nº preguntas:
@@ -936,7 +998,12 @@ function showTemaSelectionScreen(targetMode) {
       <label style="display:block;margin:8px 0;">
         Tiempo:
         <select id="time-mode-select">
-          <option value="perq">1 min por pregunta</option>
+          <option value="perq30">30s por pregunta</option>
+          <option value="perq45">45s por pregunta</option>
+          <option value="perq" selected>1 min por pregunta</option>
+          <option value="perq75">1min 15s por pregunta</option>
+          <option value="perq90">1min 30s por pregunta</option>
+          <option value="perq120">2min por pregunta</option>
           <option value="manual">Fijar minutos</option>
         </select>
         <input id="manual-minutes" type="number" min="1" value="15" style="width:70px; display:none; margin-left:8px;">
@@ -950,6 +1017,7 @@ function showTemaSelectionScreen(targetMode) {
   `;
 
   const wrap = document.getElementById("tema-select-wrap");
+  const fuenteWrap = document.getElementById("fuente-select-wrap");
 
   grouped.forEach(({ bloque, temas }) => {
     const bloqueRow = document.createElement("div");
@@ -967,6 +1035,8 @@ function showTemaSelectionScreen(targetMode) {
 
     const temasList = bloqueRow.querySelector(".temas-list");
     temas.forEach(t => {
+      const temaKey = normalizeTemaKey(t);
+      const temaDisplay = formatTemaDisplay(t);
       const line = document.createElement("label");
       line.style.display = "flex";
       line.style.alignItems = "center";
@@ -974,18 +1044,40 @@ function showTemaSelectionScreen(targetMode) {
       line.style.margin = "6px 0";
       line.style.cursor = "pointer";
       line.innerHTML = `
-        <input type="checkbox" class="tema-checkbox" data-bloque="${escapeHtml(bloque)}" value="${escapeHtml(t)}">
-        ${escapeHtml(t)}
+        <input type="checkbox" class="tema-checkbox" data-bloque="${escapeHtml(bloque)}" data-tema-key="${escapeHtml(temaKey)}" value="${escapeHtml(t)}">
+        ${escapeHtml(temaDisplay)}
       `;
       temasList.appendChild(line);
     });
   });
+
+  // Fuentes
+  const fuentes = [...new Set(questions.map(q => q.fuente || "Sin fuente"))]
+    .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
+  if (fuentes.length === 0) {
+    fuenteWrap.innerHTML = "<em>No hay fuentes disponibles</em>";
+  } else {
+    fuentes.forEach(f => {
+      const line = document.createElement("label");
+      line.style.display = "flex";
+      line.style.alignItems = "center";
+      line.style.gap = "8px";
+      line.style.margin = "6px 0";
+      line.style.cursor = "pointer";
+      line.innerHTML = `
+        <input type="checkbox" class="fuente-checkbox" value="${escapeHtml(f)}">
+        ${escapeHtml(f)}
+      `;
+      fuenteWrap.appendChild(line);
+    });
+  }
 
   const lessUsedCb = document.getElementById("less-used-checkbox");
   const allCb = document.getElementById("all-questions-checkbox");
   const numSel = document.getElementById("num-questions-select");
   const timeModeSel = document.getElementById("time-mode-select");
   const manualMinutes = document.getElementById("manual-minutes");
+  const btnClear = document.getElementById("btn-clear-selection");
 
   timeModeSel.onchange = () => {
     manualMinutes.style.display = timeModeSel.value === "manual" ? "inline-block" : "none";
@@ -1008,6 +1100,9 @@ function showTemaSelectionScreen(targetMode) {
       updateSelectedCount();
     });
   });
+  fuenteWrap.querySelectorAll(".fuente-checkbox").forEach(fcb => {
+    fcb.addEventListener("change", updateSelectedCount);
+  });
 
   lessUsedCb.onchange = updateSelectedCount;
   allCb.onchange = () => {
@@ -1017,6 +1112,17 @@ function showTemaSelectionScreen(targetMode) {
     updateSelectedCount();
   };
   numSel.onchange = updateSelectedCount;
+  btnClear.onclick = () => {
+    allCb.checked = false;
+    wrap.querySelectorAll("input").forEach(i => (i.disabled = false));
+    wrap.querySelectorAll(".bloque-toggle").forEach(cb => {
+      cb.checked = false;
+      cb.indeterminate = false;
+    });
+    wrap.querySelectorAll(".tema-checkbox").forEach(cb => (cb.checked = false));
+    fuenteWrap.querySelectorAll(".fuente-checkbox").forEach(cb => (cb.checked = false));
+    updateSelectedCount();
+  };
 
   document.getElementById("btn-back-main").onclick = showMainMenu;
 
@@ -1044,13 +1150,18 @@ function showTemaSelectionScreen(targetMode) {
   }
 
   function buildSelectionConfigFromUI() {
-    const temasChecked = Array.from(wrap.querySelectorAll(".tema-checkbox:checked")).map(cb => cb.value);
+    const temasChecked = Array.from(wrap.querySelectorAll(".tema-checkbox:checked"))
+      .map(cb => cb.getAttribute("data-tema-key"))
+      .filter(Boolean);
+    const fuentesChecked = Array.from(fuenteWrap.querySelectorAll(".fuente-checkbox:checked"))
+      .map(cb => cb.value);
 
     return {
       mode: targetMode,
       allQuestions: allCb.checked,
       lessUsed: lessUsedCb.checked,
       temas: temasChecked,
+      fuentes: fuentesChecked,
       numQuestions: parseInt(numSel.value, 10),
       timeMode: timeModeSel.value,
       manualMinutes: Math.max(1, parseInt(manualMinutes.value || "15", 10))
@@ -1071,8 +1182,17 @@ function buildPoolFromConfig(config) {
   if (config.allQuestions) {
     pool = [...questions];
   } else {
-    if (!config.temas || config.temas.length === 0) pool = [];
-    else pool = questions.filter(q => config.temas.includes(q.tema));
+    if (!config.temas || config.temas.length === 0) {
+      pool = [...questions];
+    } else {
+      const temaSet = new Set(config.temas);
+      pool = questions.filter(q => temaSet.has(normalizeTemaKey(q.tema)));
+    }
+  }
+
+  if (config.fuentes && config.fuentes.length > 0) {
+    const fuenteSet = new Set(config.fuentes);
+    pool = pool.filter(q => fuenteSet.has(q.fuente || "Sin fuente"));
   }
 
   if (config.lessUsed) {
@@ -1238,9 +1358,20 @@ function startTestWithConfig(config) {
   }
 
   const total = pool.length;
+  const perQuestionSeconds = (() => {
+    switch (config.timeMode) {
+      case "perq30": return 30;
+      case "perq45": return 45;
+      case "perq75": return 75;
+      case "perq90": return 90;
+      case "perq120": return 120;
+      case "perq":
+      default: return 60;
+    }
+  })();
   const timeSeconds = config.timeMode === "manual"
     ? config.manualMinutes * 60
-    : total * 60;
+    : total * perQuestionSeconds;
 
   if (config.mode === "perfection") {
     mode = "perfection";
@@ -2472,7 +2603,7 @@ function injectDarkModeToggleIntoMainMenu() {
   // Evitar duplicados
   if (document.getElementById("btn-darkmode-toggle")) return;
 
-  const row = extraBox.querySelector(".row");
+  const row = document.getElementById("main-row-3") || extraBox.querySelector(".row");
   if (!row) return;
 
   const btn = document.createElement("button");
