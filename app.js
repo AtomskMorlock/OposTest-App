@@ -2371,6 +2371,7 @@ function onNoSe() {
 
 function showAnswer(q, selectedTextOrNull) {
   stopTimer();
+  ttsStop();
 
   viewState = "feedback";
   lastSelectedText = selectedTextOrNull;
