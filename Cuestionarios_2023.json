@@ -1437,5 +1437,213 @@
   ],
   "respuesta_correcta": 1,
   "explicacion": "El texto refundido del Estatuto Básico del Empleado Público está actualmente contenido en el Real Decreto Legislativo 5/2015, de 30 de octubre, que refundió la Ley 7/2007 con sus modificaciones posteriores."
+},
+{
+  "id": "Cuestionario.2023.091",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿Cuántos títulos tiene la Ley Orgánica 3/2007, de 22 de marzo, para la Igualdad Efectiva de Mujeres y Hombres, además del preliminar?",
+  "opciones": [
+    "Uno.",
+    "Cinco.",
+    "Ocho.",
+    "Diez."
+  ],
+  "respuesta_correcta": 2,
+  "explicacion": "La Ley Orgánica 3/2007, de 22 de marzo, para la Igualdad Efectiva de Mujeres y Hombres se estructura en un Título Preliminar y ocho títulos adicionales que regulan diferentes aspectos de la igualdad de género."
+},
+{
+  "id": "Cuestionario.2023.092",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿En qué artículo de la Constitución se reconoce el derecho a la igualdad de todos los españoles sin que pueda prevalecer discriminación alguna por razón de sexo?",
+  "opciones": [
+    "Artículo 5.",
+    "Artículo 7.",
+    "Artículo 12.",
+    "Artículo 14."
+  ],
+  "respuesta_correcta": 3,
+  "explicacion": "El artículo 14 de la Constitución Española establece el principio de igualdad ante la ley y prohíbe cualquier discriminación por razón de nacimiento, raza, sexo, religión, opinión o cualquier otra condición o circunstancia personal o social."
+},
+{
+  "id": "Cuestionario.2023.093",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿Qué plan desarrolla actualmente el artículo 64 de la Ley Orgánica 3/2007, de 22 de marzo para la igualdad efectiva de mujeres y hombres?",
+  "opciones": [
+    "Plan para la Igualdad de Género en la Administración General del Estado de 2005.",
+    "Plan Estratégico de Igualdad de Oportunidades entre Mujeres y Hombres de 2014.",
+    "I Plan de Igualdad entre mujeres y hombres en la Administración General del Estado y en sus Organismos Autónomos de 2007.",
+    "III Plan para la igualdad de género en la Administración General del Estado y en los Organismos Públicos vinculados o dependientes de ella de 2020."
+  ],
+  "respuesta_correcta": 3,
+  "explicacion": "El artículo 64 de la Ley Orgánica 3/2007 establece la obligación de elaborar planes de igualdad en la AGE. Actualmente está en vigor el III Plan para la igualdad de género en la Administración General del Estado, aprobado en 2020."
+},
+{
+  "id": "Cuestionario.2023.094",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "En qué plan hay 7 ejes:",
+  "opciones": [
+    "En ninguno.",
+    "En las medidas para favorecer la igualdad de mujeres y hombres de 2005.",
+    "En el Plan Estratégico de Igualdad de Oportunidades entre Mujeres y Hombres de 2014.",
+    "En el Plan Estratégico de Igualdad de Oportunidades."
+  ],
+  "respuesta_correcta": 2,
+  "explicacion": "El Plan Estratégico de Igualdad de Oportunidades entre Mujeres y Hombres de 2014 se estructura en 7 ejes estratégicos que abordan diferentes ámbitos para alcanzar la igualdad efectiva."
+},
+{
+  "id": "Cuestionario.2023.095",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿En qué título de la Ley Orgánica 3/2007, de 22 de marzo, para la Igualdad Efectiva de Mujeres y Hombres se establece la igualdad de presencia de mujeres y hombres en listas electorales?",
+  "opciones": [
+    "II.",
+    "III.",
+    "IV.",
+    "V."
+  ],
+  "respuesta_correcta": 0,
+  "explicacion": "El Título II de la Ley Orgánica 3/2007 regula la igualdad y no discriminación en el ámbito político, estableciendo en su artículo 44 bis la composición equilibrada de las listas electorales."
+},
+{
+  "id": "Cuestionario.2023.096",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿En qué título de la Ley Orgánica 3/2007, de 22 de marzo, para la Igualdad Efectiva de Mujeres y ¿Hombres se establecen principios para el empleo público?",
+  "opciones": [
+    "II.",
+    "III.",
+    "IV.",
+    "V."
+  ],
+  "respuesta_correcta": 3,
+  "explicacion": "El Título V de la Ley Orgánica 3/2007 regula el principio de igualdad en el empleo público, estableciendo criterios de actuación de las Administraciones Públicas y medidas para promover la igualdad en el ámbito laboral público."
+},
+{
+  "id": "Cuestionario.2023.097",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿Cuántos títulos tiene la Ley Orgánica 1/2004, de 28 de diciembre, de Medidas de Protección Integral contra la Violencia de Género, además del preliminar?",
+  "opciones": [
+    "Uno.",
+    "Cinco.",
+    "Ocho.",
+    "Diez."
+  ],
+  "respuesta_correcta": 1,
+  "explicacion": "La Ley Orgánica 1/2004, de 28 de diciembre, de Medidas de Protección Integral contra la Violencia de Género se estructura en un Título Preliminar y cinco títulos que abordan medidas de sensibilización, prevención, protección y asistencia."
+},
+{
+  "id": "Cuestionario.2023.098",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "Las ayudas sociales a las mujeres víctima de la violencia de género se consideran:",
+  "opciones": [
+    "Un derecho de estas mujeres.",
+    "Una medida de sensibilización.",
+    "Parte de la tutela judicial.",
+    "Parte de la tutela penal."
+  ],
+  "respuesta_correcta": 0,
+  "explicacion": "Las ayudas sociales a las víctimas de violencia de género se configuran como un derecho reconocido en la Ley Orgánica 1/2004, garantizando apoyo económico y recursos para la recuperación integral de las víctimas."
+},
+{
+  "id": "Cuestionario.2023.099",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "En el preámbulo de la ley se explica la creación de un órgano judicial para la tutela judicial:",
+  "opciones": [
+    "Juzgados de Violencia sobre la Mujer.",
+    "Audiencia Nacional.",
+    "Fiscal contra la Violencia sobre la Mujer.",
+    "A y c son ciertas."
+  ],
+  "respuesta_correcta": 0,
+  "explicacion": "La Ley Orgánica 1/2004 creó los Juzgados de Violencia sobre la Mujer como órganos especializados para conocer de los actos de violencia de género, concentrando competencias civiles y penales."
+},
+{
+  "id": "Cuestionario.2023.100",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿En qué artículo de la Constitución Española se recoge la política de apoyo a los minusválidos?",
+  "opciones": [
+    "1.",
+    "49.",
+    "117.",
+    "14."
+  ],
+  "respuesta_correcta": 1,
+  "explicacion": "El artículo 49 de la Constitución establece que los poderes públicos realizarán una política de previsión, tratamiento, rehabilitación e integración de los disminuidos físicos, sensoriales y psíquicos, prestándoles la atención especializada que requieran."
+},
+{
+  "id": "Cuestionario.2023.101",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "¿Cuál es la norma que regula actualmente el apoyo a personas con discapacidad?",
+  "opciones": [
+    "Ley 51/2003.",
+    "Ley 13/1982.",
+    "Ley 49/2007.",
+    "Ley 8/2001."
+  ],
+  "respuesta_correcta": 3,
+  "explicacion": "La norma vigente que regula el apoyo a personas con discapacidad es la Ley 8/2001, que establece medidas de integración social y laboral de las personas con discapacidad en España."
+},
+{
+  "id": "Cuestionario.2023.102",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "Una forma de apoyo de la integración de las personas con discapacidad en el empleo:",
+  "opciones": [
+    "Es la bonificación en la Seguridad Social de personas con discapacidad o los cupos para el acceso a la función pública.",
+    "Es la bonificación en la Seguridad Social de personas con discapacidad o el subsidio de movilidad.",
+    "Es el cupo especial para el acceso a la función pública o las adaptaciones curriculares.",
+    "Ninguna respuesta es correcta."
+  ],
+  "respuesta_correcta": 0,
+  "explicacion": "Las principales medidas de apoyo a la integración laboral de personas con discapacidad incluyen bonificaciones en las cotizaciones a la Seguridad Social para empresas que las contraten y cupos de reserva en el acceso a la función pública."
+},
+{
+  "id": "Cuestionario.2023.103",
+  "tema": "7. La Organización Territorial del Estado. Las Comunidades Autónomas. La Administración Local. Organización política y administrativa. La distribución de competencias en la Constitución Española de 1978 entre Estado y Comunidades Autónomas en materia de cultura.",
+  "bloque": "Bloque 1. Legislación",
+  "fuente": "Cuestionarios 2023",
+  "modelo": "Cuestionarios 2023. Tema 7",
+  "pregunta": "La Ley 39/2006 regula temas de:",
+  "opciones": [
+    "Igualdad de hombres y mujeres.",
+    "Violencia de Género.",
+    "Discapacidad.",
+    "Personas en situación de dependencia."
+  ],
+  "respuesta_correcta": 3,
+  "explicacion": "La Ley 39/2006, de 14 de diciembre, de Promoción de la Autonomía Personal y Atención a las personas en situación de dependencia, regula el Sistema de Atención a la Dependencia y establece derechos y servicios para personas dependientes."
 }
 ]
