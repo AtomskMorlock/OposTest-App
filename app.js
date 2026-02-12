@@ -16,20 +16,73 @@
 // =======================
 // STORAGE KEYS
 // =======================
-const LS_EXTRA_QUESTIONS = "chari_extra_questions_v1";
-const LS_STATS = "chari_stats_v1";
-const LS_HISTORY = "chari_history_v1";
-const LS_PENDING_REVIEW = "chari_pending_review_v1";
-const LS_PENDING_REVIEW_DONE = "chari_pending_review_done_v1";
-const LS_ACTIVE_PAUSED_TEST = "chari_active_paused_test_v1";
-const LS_DELETED_IDS = "chari_deleted_ids_v1";
-const LS_TTS_SETTINGS = "chari_tts_settings_v1";
+const LS_EXTRA_QUESTIONS = "chatgpt_extra_questions_v1";
+const LS_STATS = "chatgpt_stats_v1";
+const LS_HISTORY = "chatgpt_history_v1";
+const LS_PENDING_REVIEW = "chatgpt_pending_review_v1";
+const LS_PENDING_REVIEW_DONE = "chatgpt_pending_review_done_v1";
+const LS_ACTIVE_PAUSED_TEST = "chatgpt_active_paused_test_v1";
+const LS_DELETED_IDS = "chatgpt_deleted_ids_v1";
+const LS_TTS_SETTINGS = "chatgpt_tts_settings_v1";
 
 // ✅ NUEVO: IDs purgadas definitivamente (no deben volver aunque estén en questions.json)
-const LS_PURGED_IDS = "chari_purged_ids_v1";
+const LS_PURGED_IDS = "chatgpt_purged_ids_v1";
 
 // migración antigua
-const LS_OLD_ADDED_QUESTIONS = "chari_added_questions_v1";
+const LS_OLD_ADDED_QUESTIONS = "chatgpt_added_questions_v1";
+
+// =======================
+// MIGRACION CHARI -> CHATGPT
+// =======================
+function migrateLocalStorageChariToChatGPT() {
+  const migrationFlag = "chatgpt_migration_chari_to_chatgpt_v1";
+  try {
+    if (localStorage.getItem(migrationFlag) === "done") return;
+  } catch (err) {
+    console.warn("No se pudo leer la marca de migracion", err);
+  }
+
+  const pairs = [
+    ["chari_extra_questions_v1", LS_EXTRA_QUESTIONS],
+    ["chari_stats_v1", LS_STATS],
+    ["chari_history_v1", LS_HISTORY],
+    ["chari_pending_review_v1", LS_PENDING_REVIEW],
+    ["chari_pending_review_done_v1", LS_PENDING_REVIEW_DONE],
+    ["chari_active_paused_test_v1", LS_ACTIVE_PAUSED_TEST],
+    ["chari_deleted_ids_v1", LS_DELETED_IDS],
+    ["chari_tts_settings_v1", LS_TTS_SETTINGS],
+    ["chari_purged_ids_v1", LS_PURGED_IDS],
+    ["chari_added_questions_v1", LS_OLD_ADDED_QUESTIONS],
+    ["chari_dark_mode_v1", "chatgpt_dark_mode_v1"]
+  ];
+
+  for (const [oldKey, newKey] of pairs) {
+    try {
+      if (localStorage.getItem(newKey) !== null) continue;
+      const oldValue = localStorage.getItem(oldKey);
+      if (oldValue === null) continue;
+      localStorage.setItem(newKey, oldValue);
+    } catch (err) {
+      console.warn("No se pudo migrar LocalStorage:", oldKey, "->", newKey, err);
+    }
+  }
+
+  for (const [oldKey] of pairs) {
+    try {
+      localStorage.removeItem(oldKey);
+    } catch (err) {
+      console.warn("No se pudo borrar LocalStorage antiguo:", oldKey, err);
+    }
+  }
+
+  try {
+    localStorage.setItem(migrationFlag, "done");
+  } catch (err) {
+    console.warn("No se pudo guardar la marca de migracion", err);
+  }
+}
+
+migrateLocalStorageChariToChatGPT();
 
 // =======================
 // SANITIZACIÓN LOCALSTORAGE (ARRANQUE)
@@ -3474,7 +3527,7 @@ const BACKUP_VERSION = 1;
 
 function exportFullBackup() {
   const payload = {
-    app: "chari-oposiciones",
+    app: "chatgpt-oposiciones",
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
 
@@ -3499,7 +3552,7 @@ function exportFullBackup() {
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = `backup_chari_${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `backup_chatgpt_${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -3516,7 +3569,8 @@ async function importFullBackupFromText(rawText) {
     return;
   }
 
-  if (!parsed || parsed.app !== "chari-oposiciones") {
+  const appId = parsed?.app;
+  if (!appId || (appId !== "chatgpt-oposiciones" && appId !== "chari-oposiciones")) {
     showAlert("Este archivo no parece un backup válido de la app.");
     return;
   }
@@ -3598,7 +3652,7 @@ async function importFullBackupFromText(rawText) {
 // MODO OSCURO (PERSISTENTE)
 // =======================
 
-const LS_DARK_MODE = "chari_dark_mode_v1";
+const LS_DARK_MODE = "chatgpt_dark_mode_v1";
 
 function isDarkModeEnabled() {
   return lsGetJSON(LS_DARK_MODE, false) === true;
@@ -3620,113 +3674,113 @@ function ensureDarkModeStyleTag() {
        DARK MODE THEME
        ======================= */
 
-    body.chari-dark {
+    body.chatgpt-dark {
       background: #0b0f14 !important;
       color: #e6eaf0 !important;
     }
 
-    body.chari-dark h1,
-    body.chari-dark h2,
-    body.chari-dark h3,
-    body.chari-dark h4,
-    body.chari-dark p,
-    body.chari-dark label,
-    body.chari-dark .small,
-    body.chari-dark div,
-    body.chari-dark span {
+    body.chatgpt-dark h1,
+    body.chatgpt-dark h2,
+    body.chatgpt-dark h3,
+    body.chatgpt-dark h4,
+    body.chatgpt-dark p,
+    body.chatgpt-dark label,
+    body.chatgpt-dark .small,
+    body.chatgpt-dark div,
+    body.chatgpt-dark span {
       color: #e6eaf0;
     }
 
-    body.chari-dark hr {
+    body.chatgpt-dark hr {
       border-color: rgba(255,255,255,0.12);
     }
 
     /* Contenedores principales (por si tienen fondo blanco) */
-    body.chari-dark #main-menu,
-    body.chari-dark #test-menu,
-    body.chari-dark #test-container,
-    body.chari-dark #results-container,
-    body.chari-dark #import-container {
+    body.chatgpt-dark #main-menu,
+    body.chatgpt-dark #test-menu,
+    body.chatgpt-dark #test-container,
+    body.chatgpt-dark #results-container,
+    body.chatgpt-dark #import-container {
       background: transparent !important;
     }
 
     /* Cards */
-    body.chari-dark .card,
-    body.chari-dark [style*="background:white"],
-    body.chari-dark [style*="background: white"] {
+    body.chatgpt-dark .card,
+    body.chatgpt-dark [style*="background:white"],
+    body.chatgpt-dark [style*="background: white"] {
       background: rgba(255,255,255,0.06) !important;
       border: 1px solid rgba(255,255,255,0.10) !important;
       box-shadow: none !important;
     }
 
     /* Inputs / textarea / select */
-    body.chari-dark input,
-    body.chari-dark textarea,
-    body.chari-dark select {
+    body.chatgpt-dark input,
+    body.chatgpt-dark textarea,
+    body.chatgpt-dark select {
       background: rgba(255,255,255,0.06) !important;
       color: #e6eaf0 !important;
       border: 1px solid rgba(255,255,255,0.16) !important;
       outline: none !important;
     }
 
-    body.chari-dark input::placeholder,
-    body.chari-dark textarea::placeholder {
+    body.chatgpt-dark input::placeholder,
+    body.chatgpt-dark textarea::placeholder {
       color: rgba(230,234,240,0.6) !important;
     }
 
     /* Botones genéricos */
-    body.chari-dark button {
+    body.chatgpt-dark button {
       background: rgba(255,255,255,0.10);
       color: #e6eaf0;
       border: 1px solid rgba(255,255,255,0.14);
     }
 
-    body.chari-dark button:hover {
+    body.chatgpt-dark button:hover {
       filter: brightness(1.08);
     }
 
     /* Clases existentes */
-    body.chari-dark button.secondary {
+    body.chatgpt-dark button.secondary {
       background: rgba(120,170,255,0.18);
       border-color: rgba(120,170,255,0.30);
     }
 
-    body.chari-dark button.success {
+    body.chatgpt-dark button.success {
       background: rgba(120,170,255,0.18);
       border-color: rgba(120,170,255,0.30);
     }
 
-    body.chari-dark button.danger {
+    body.chatgpt-dark button.danger {
       background: rgba(255,90,90,0.18);
       border-color: rgba(255,90,90,0.35);
     }
 
-    body.chari-dark .answer-btn[style*="lightgreen"] {
+    body.chatgpt-dark .answer-btn[style*="lightgreen"] {
       background: rgba(70, 160, 110, 0.28) !important;
     }
-    body.chari-dark .answer-btn[style*="salmon"] {
+    body.chatgpt-dark .answer-btn[style*="salmon"] {
       background: rgba(190, 90, 90, 0.28) !important;
     }
 
-    body.chari-dark #no-btn {
+    body.chatgpt-dark #no-btn {
       background: rgba(255,255,255,0.10) !important;
       border: 1px solid rgba(255,255,255,0.14) !important;
     }
 
-    body.chari-dark .modal,
-    body.chari-dark .modal * {
+    body.chatgpt-dark .modal,
+    body.chatgpt-dark .modal * {
       color: #000 !important;
     }
 
-    body.chari-dark .modal button {
+    body.chatgpt-dark .modal button {
       background: rgba(120,170,255,0.22) !important;
       border-color: rgba(120,170,255,0.35) !important;
       color: #000 !important;
     }
 
     /* Pills / badges (por si usan fondo claro) */
-    body.chari-dark #mode-pill,
-    body.chari-dark #db-count-pill {
+    body.chatgpt-dark #mode-pill,
+    body.chatgpt-dark #db-count-pill {
       background: rgba(255,255,255,0.08) !important;
       color: #e6eaf0 !important;
       border: 1px solid rgba(255,255,255,0.12) !important;
@@ -3740,7 +3794,7 @@ function applyDarkModeToDocument() {
   ensureDarkModeStyleTag();
 
   const enabled = isDarkModeEnabled();
-  document.body.classList.toggle("chari-dark", enabled);
+  document.body.classList.toggle("chatgpt-dark", enabled);
 
   // Si quieres, aquí podríamos también ajustar algún inline style concreto si lo hubiera
   // pero por ahora lo resolvemos vía CSS global.
@@ -3804,8 +3858,8 @@ function cssEscape(val) {
 
 (function setupKeyboardShortcuts() {
   // Evitamos registrar más de una vez
-  if (window.__chariKeyboardShortcutsInstalled) return;
-  window.__chariKeyboardShortcutsInstalled = true;
+  if (window.__chatgptKeyboardShortcutsInstalled) return;
+  window.__chatgptKeyboardShortcutsInstalled = true;
 
   function isTestVisible() {
     if (!testContainer) return false;
