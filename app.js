@@ -200,6 +200,9 @@ const reviewText = document.getElementById("review-text");
 const backToResultsBtn = document.getElementById("back-to-results-btn");
 const statsContainer = document.getElementById("stats-container");
 const importContainer = document.getElementById("import-container");
+const configContainer = document.getElementById("config-container");
+const configActions = document.getElementById("config-actions");
+const backConfigBtn = document.getElementById("btn-back-config");
 
 const dbCountPill = document.getElementById("db-count-pill");
 
@@ -221,6 +224,13 @@ const ttsReadBtn = document.getElementById("tts-read");
 const startTestBtn = document.getElementById("btn-start-test");
 const quickTest10Btn = document.getElementById("btn-quick-test-10");
 const quickTest20Btn = document.getElementById("btn-quick-test-20");
+const openTestModalBtn = document.getElementById("btn-open-test-modal");
+const testStartModal = document.getElementById("test-start-modal");
+const closeTestModalBtn = document.getElementById("btn-close-test-modal");
+const examSourceModal = document.getElementById("exam-source-modal");
+const examSourceButtons = document.getElementById("exam-source-buttons");
+const examStartBtn = document.getElementById("btn-exam-start");
+const examCloseBtn = document.getElementById("btn-exam-close");
 const voiceSettingsBtn = document.getElementById("btn-voice-settings");
 const voiceSettingsBackBtn = document.getElementById("btn-voice-back");
 const openImportBtn = document.getElementById("btn-open-import");
@@ -765,6 +775,20 @@ function formatTime(sec) {
 }
 
 // =======================
+// UTIL: PUNTUACION OFICIAL
+// =======================
+function calcBruta(correct, wrong) {
+  return Number(correct || 0) - Number(wrong || 0) * 0.3;
+}
+
+function calcNotaSobre100(correct, wrong, noSe) {
+  const n = Number(correct || 0) + Number(wrong || 0) + Number(noSe || 0);
+  if (!n) return 0;
+  const bruta = calcBruta(correct, wrong);
+  return (bruta / n) * 100;
+}
+
+// =======================
 // UTIL: NORMALIZACIÓN / ORDEN TEMAS
 // =======================
 function extractTemaNumber(temaStr) {
@@ -1051,9 +1075,13 @@ function applyDeletedFilter() {
 
 function refreshDbCountPill() {
   const extraCount = loadExtraQuestions().length;
-  dbCountPill.textContent =
-    `Preguntas en el banco: ${questions.length} ` +
-    `(base ${questionsBase.length} + añadidas ${extraCount})`;
+  if (extraCount > 0) {
+    dbCountPill.textContent =
+      `Preguntas en el banco: ${questions.length} ` +
+      `(base ${questionsBase.length} + añadidas ${extraCount})`;
+    return;
+  }
+  dbCountPill.textContent = `Preguntas en el banco: ${questions.length}`;
 }
 
 // =======================
@@ -1073,8 +1101,10 @@ function hideAll() {
   mainMenu.style.display = "none";
   testMenu.style.display = "none";
   testContainer.style.display = "none";
+  configContainer.style.display = "none";
   voiceSettingsContainer.style.display = "none";
   resultsContainer.style.display = "none";
+  if (testStartModal) testStartModal.style.display = "none";
   reviewContainer.style.display = "none";
   statsContainer.style.display = "none";
   importContainer.style.display = "none";
@@ -1112,28 +1142,12 @@ function showMainMenu() {
 
   const paused = lsGetJSON(LS_ACTIVE_PAUSED_TEST, null);
   const hist = lsGetJSON(LS_HISTORY, []);
-  const last = hist.length ? hist[hist.length - 1] : null;
+  const last = [...hist].reverse().find(h => ((h?.correct || 0) + (h?.wrong || 0) + (h?.noSe || 0)) > 0) || null;
 
-  const rowTest = document.getElementById("main-row-test");
-  if (rowTest) {
-    rowTest.innerHTML = "";
-    if (startTestBtn) rowTest.appendChild(startTestBtn);
-    const reviewBtn = document.createElement("button");
-    reviewBtn.id = "btn-review";
-    reviewBtn.className = "secondary";
-    reviewBtn.textContent = `Repasar pendientes (${pendingCount})`;
-    rowTest.appendChild(reviewBtn);
-  }
+  const reviewBtn = document.getElementById("btn-review");
+  if (reviewBtn) reviewBtn.textContent = `Repasar pendientes (${pendingCount})`;
 
-  const rowExam = document.getElementById("main-row-exam");
-  if (rowExam) {
-    rowExam.innerHTML = `
-      <button id="btn-exam" class="secondary">Modo examen</button>
-      <button id="btn-perfection" class="secondary">Perfeccionamiento</button>
-    `;
-  }
-
-  const rowPaused = document.getElementById("main-row-paused");
+  const rowPaused = document.getElementById("modal-row-paused");
   if (rowPaused) {
     rowPaused.innerHTML = paused
       ? `
@@ -1144,12 +1158,6 @@ function showMainMenu() {
   }
 
   extraBox.innerHTML = `
-    <div class="row" id="main-row-1">
-      <button id="btn-bank" class="secondary">Banco de preguntas</button>
-      <button id="btn-stats" class="secondary">Estadísticas</button>
-    </div>
-    <div class="row" id="main-row-2">
-    </div>
     <div class="small" id="main-db-pill" style="margin-top:8px;"></div>
     ${
       last
@@ -1179,16 +1187,51 @@ function showMainMenu() {
     };
   }
 
-  document.getElementById("btn-review").onclick = () => startReviewPending();
-  document.getElementById("btn-exam").onclick = () => showExamMenu();
-  document.getElementById("btn-perfection").onclick = () => showTemaSelectionScreen("perfection");
-  document.getElementById("btn-bank").onclick = () => showQuestionBank();
-  document.getElementById("btn-stats").onclick = () => showStatsScreen();
+  const btnReview = document.getElementById("btn-review");
+  if (btnReview) btnReview.onclick = () => startReviewPending();
+  const btnExam = document.getElementById("btn-exam");
+  if (btnExam) btnExam.onclick = () => {
+    closeTestStartModal();
+    openExamSourceModal();
+  };
+  if (openConfigBtn) openConfigBtn.onclick = () => showConfigScreen();
 
   refreshDbCountPill();
 
-  // ✅ Hook: añade el toggle de modo oscuro en el menú (sin tocar HTML)
+  // ✅ Hook: añade el toggle de modo oscuro en el menú principal
   injectDarkModeToggleIntoMainMenu();
+}
+
+function showConfigScreen() {
+  hideAll();
+  configContainer.style.display = "block";
+
+  if (configActions) {
+    configActions.innerHTML = `
+      <button id="btn-bank" class="secondary">Banco de preguntas</button>
+      <button id="btn-stats" class="secondary">Estadísticas</button>
+      <button id="btn-voice-settings" class="secondary">Voz</button>
+    `;
+  }
+
+  const btnBank = document.getElementById("btn-bank");
+  if (btnBank) btnBank.onclick = () => showQuestionBank();
+  const btnStats = document.getElementById("btn-stats");
+  if (btnStats) btnStats.onclick = () => showStatsScreen();
+  const btnVoice = document.getElementById("btn-voice-settings");
+  if (btnVoice) btnVoice.onclick = showVoiceSettingsScreen;
+}
+
+function openTestStartModal() {
+  if (!testStartModal) return;
+  testStartModal.style.display = "flex";
+  testStartModal.setAttribute("aria-hidden", "false");
+}
+
+function closeTestStartModal() {
+  if (!testStartModal) return;
+  testStartModal.style.display = "none";
+  testStartModal.setAttribute("aria-hidden", "true");
 }
 
 // =======================
@@ -1257,6 +1300,14 @@ function showStatsScreen() {
 
   const stats = getStats();
   const hist = asArray(lsGetJSON(LS_HISTORY, []));
+  const now = new Date();
+  const last10Start = new Date(now);
+  last10Start.setHours(0, 0, 0, 0);
+  last10Start.setDate(last10Start.getDate() - 9);
+  const histLast10 = hist.filter(h => {
+    const d = h?.date ? new Date(h.date) : null;
+    return d && !isNaN(d) && d >= last10Start;
+  });
 
   let totalAnswered = 0;
   let totalCorrect = 0;
@@ -1282,6 +1333,57 @@ function showStatsScreen() {
 
   const totalTests = hist.length;
   const lastTest = totalTests ? hist[totalTests - 1] : null;
+
+  const histTotals = hist.reduce(
+    (acc, h) => {
+      acc.tests += 1;
+      acc.correct += Number(h.correct) || 0;
+      acc.wrong += Number(h.wrong) || 0;
+      acc.noSe += Number(h.noSe) || 0;
+      acc.total += Number(h.total) || 0;
+      return acc;
+    },
+    { tests: 0, correct: 0, wrong: 0, noSe: 0, total: 0 }
+  );
+
+  const last10Totals = histLast10.reduce(
+    (acc, h) => {
+      acc.tests += 1;
+      acc.correct += Number(h.correct) || 0;
+      acc.wrong += Number(h.wrong) || 0;
+      acc.noSe += Number(h.noSe) || 0;
+      acc.total += Number(h.total) || 0;
+      return acc;
+    },
+    { tests: 0, correct: 0, wrong: 0, noSe: 0, total: 0 }
+  );
+
+  const histAnswered = histTotals.correct + histTotals.wrong + histTotals.noSe;
+  const histAccuracy = histAnswered ? (histTotals.correct / histAnswered) * 100 : 0;
+  const last10Answered = last10Totals.correct + last10Totals.wrong + last10Totals.noSe;
+  const last10Accuracy = last10Answered ? (last10Totals.correct / last10Answered) * 100 : 0;
+  const histScoreBruta = calcBruta(histTotals.correct, histTotals.wrong);
+  const histScore100 = calcNotaSobre100(histTotals.correct, histTotals.wrong, histTotals.noSe);
+  const last10ScoreBruta = calcBruta(last10Totals.correct, last10Totals.wrong);
+  const last10Score100 = calcNotaSobre100(last10Totals.correct, last10Totals.wrong, last10Totals.noSe);
+
+  const renderAccuracyCircle = (title, correct, wrong, noSe) => {
+    const total = correct + wrong + noSe;
+    const pct = total ? Math.round((correct / total) * 100) : 0;
+    const wrongPct = 100 - pct;
+    return `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <div style="position:relative;width:140px;height:140px;border-radius:50%;background:conic-gradient(#2e8b57 0 ${pct}%, #d9534f ${pct}% 100%);display:flex;align-items:center;justify-content:center;">
+          <div style="width:108px;height:108px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:inset 0 0 0 1px #e6e6e6;">
+            <div style="font-weight:700;font-size:20px;">${pct}%</div>
+            <div class="small">Aciertos</div>
+          </div>
+        </div>
+        <div class="small">${escapeHtml(title)}</div>
+        <div class="small">Fallos ${wrongPct}%</div>
+      </div>
+    `;
+  };
 
   const byDay = new Map();
   hist.forEach(h => {
@@ -1311,19 +1413,40 @@ function showStatsScreen() {
     .join("");
 
   statsContent.innerHTML = `
-    <div class="card">
-      <div><strong>Preguntas contestadas:</strong> ${totalAnswered}</div>
-      <div><strong>Preguntas distintas contestadas:</strong> ${uniqueAnswered}</div>
-      <div><strong>Vistas totales:</strong> ${totalSeen}</div>
-      <div><strong>Aciertos:</strong> ${totalCorrect}</div>
-      <div><strong>Fallos:</strong> ${totalWrong}</div>
-      <div><strong>No lo sé:</strong> ${totalNoSe}</div>
-      <div><strong>Porcentaje de acierto:</strong> ${accuracy.toFixed(1)}%</div>
-      <div><strong>Tests realizados:</strong> ${totalTests}</div>
-      ${lastTest ? `<div><strong>Último test:</strong> ${new Date(lastTest.date).toLocaleString("es-ES")}</div>` : ""}
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:start;">
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px;">Histórico total</div>
+        <div><strong>Tests realizados:</strong> ${histTotals.tests}</div>
+        <div><strong>Preguntas contestadas:</strong> ${histAnswered}</div>
+        <div><strong>Aciertos:</strong> ${histTotals.correct}</div>
+        <div><strong>Fallos:</strong> ${histTotals.wrong}</div>
+        <div><strong>No lo sé:</strong> ${histTotals.noSe}</div>
+        <div><strong>Porcentaje de acierto:</strong> ${histAccuracy.toFixed(1)}%</div>
+        <div><strong>Puntuación total:</strong> ${histScoreBruta.toFixed(1)}</div>
+        <div><strong>Nota sobre 100:</strong> ${histScore100.toFixed(2)}</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+        <div style="display:flex;gap:24px;align-items:center;justify-content:center;flex-wrap:wrap;">
+          ${renderAccuracyCircle("Histórico total", histTotals.correct, histTotals.wrong, histTotals.noSe)}
+          ${renderAccuracyCircle("Últimos 10 días", last10Totals.correct, last10Totals.wrong, last10Totals.noSe)}
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px;">Últimos 10 días</div>
+        <div><strong>Tests realizados:</strong> ${last10Totals.tests}</div>
+        <div><strong>Preguntas contestadas:</strong> ${last10Answered}</div>
+        <div><strong>Aciertos:</strong> ${last10Totals.correct}</div>
+        <div><strong>Fallos:</strong> ${last10Totals.wrong}</div>
+        <div><strong>No lo sé:</strong> ${last10Totals.noSe}</div>
+        <div><strong>Porcentaje de acierto:</strong> ${last10Accuracy.toFixed(1)}%</div>
+        <div><strong>Puntuación total:</strong> ${last10ScoreBruta.toFixed(1)}</div>
+        <div><strong>Nota sobre 100:</strong> ${last10Score100.toFixed(2)}</div>
+      </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-top:16px;">
       <h3>Historial de días</h3>
       ${dayRows || `<div class="small">No hay historial todavía.</div>`}
     </div>
@@ -1334,7 +1457,7 @@ function showStatsScreen() {
     <button id="btn-reset-stats" class="secondary">Resetear estadísticas</button>
   `;
 
-  document.getElementById("btn-stats-back").onclick = showMainMenu;
+  document.getElementById("btn-stats-back").onclick = showConfigScreen;
   document.getElementById("btn-reset-stats").onclick = async () => {
     const ok = await showConfirm(
       "¿Seguro que quieres resetear estadísticas, historial y pendientes? (No borra preguntas)",
@@ -1561,8 +1684,8 @@ function groupTemasByBloque() {
   }));
 }
 
-function showTemaSelectionScreen(targetMode) {
-  mode = targetMode;
+function showTemaSelectionScreen() {
+  mode = "practice";
 
   showTestMenuScreen();
 
@@ -1580,9 +1703,12 @@ function showTemaSelectionScreen(targetMode) {
   const totalQuestions = questions.length;
 
   testMenu.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
       <h2 style="margin:0;">Personaliza el test</h2>
-      <button id="btn-start-practice-top" class="success">${targetMode === "perfection" ? "Iniciar perfeccionamiento" : "Comenzar test"}</button>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        <button id="btn-start-practice-top" class="success">Comenzar test</button>
+        <button id="btn-perfection-toggle" class="secondary">Perfeccionamiento</button>
+      </div>
     </div>
     <div class="small" style="margin-bottom:10px;"></div>
 
@@ -1623,7 +1749,7 @@ function showTemaSelectionScreen(targetMode) {
     </div>
 
     <div id="tema-bottom-actions" style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
-      <button id="btn-start-practice" class="success">${targetMode === "perfection" ? "Iniciar perfeccionamiento" : "Comenzar test"}</button>
+      <button id="btn-start-practice" class="success">Comenzar test</button>
       <button id="btn-back-main" class="secondary">Volver</button>
     </div>
   `;
@@ -1712,8 +1838,10 @@ function showTemaSelectionScreen(targetMode) {
 
   const lessUsedBtn = document.getElementById("btn-less-used");
   const toggleAllBtn = document.getElementById("btn-toggle-all");
+  const perfectionBtn = document.getElementById("btn-perfection-toggle");
   const numButtonsWrap = document.getElementById("num-questions-buttons");
   let lessUsedActive = false;
+  let perfectionActive = false;
   let numQuestionsValue = null;
   const timeButtonsWrap = document.getElementById("time-mode-buttons");
   let timeModeValue = "perq";
@@ -1775,6 +1903,13 @@ function showTemaSelectionScreen(targetMode) {
     };
   }
 
+  if (perfectionBtn) {
+    perfectionBtn.onclick = () => {
+      perfectionActive = !perfectionActive;
+      updatePerfectionUi();
+    };
+  }
+
   if (toggleAllBtn) {
     toggleAllBtn.onclick = () => {
       const anyChecked = wrap.querySelectorAll(".tema-checkbox:checked").length > 0;
@@ -1816,7 +1951,9 @@ function showTemaSelectionScreen(targetMode) {
   }
   const clearAllSelections = () => {
     lessUsedActive = false;
+    perfectionActive = false;
     if (lessUsedBtn) lessUsedBtn.className = "";
+    updatePerfectionUi();
     if (toggleAllBtn) toggleAllBtn.textContent = "Marcar todas";
     wrap.querySelectorAll("input").forEach(i => (i.disabled = false));
     wrap.querySelectorAll(".bloque-toggle").forEach(cb => {
@@ -1877,7 +2014,7 @@ function showTemaSelectionScreen(targetMode) {
       .map(btn => btn.getAttribute("data-fuente"));
 
     return {
-      mode: targetMode,
+      mode: perfectionActive ? "perfection" : "practice",
       allQuestions: false,
       lessUsed: lessUsedActive,
       temas: temasChecked,
@@ -1955,6 +2092,20 @@ function showTemaSelectionScreen(targetMode) {
       }
     });
   }
+
+  function updatePerfectionUi() {
+    if (!perfectionBtn) return;
+    if (perfectionActive) {
+      perfectionBtn.className = "success";
+    } else {
+      perfectionBtn.className = "secondary";
+    }
+    const label = perfectionActive ? "Iniciar perfeccionamiento" : "Comenzar test";
+    const topBtn = document.getElementById("btn-start-practice-top");
+    const bottomBtn = document.getElementById("btn-start-practice");
+    if (topBtn) topBtn.textContent = label;
+    if (bottomBtn) bottomBtn.textContent = label;
+  }
 }
 
 function buildPoolFromConfig(config) {
@@ -2007,6 +2158,74 @@ function buildPoolFromConfig(config) {
   }
 
   return pool;
+}
+
+// =======================
+// MODO EXAMEN POR FUENTES (MODAL)
+// =======================
+let selectedExamSources = new Set();
+
+function openExamSourceModal() {
+  if (!examSourceModal || !examSourceButtons) return;
+
+  selectedExamSources = new Set();
+  examSourceButtons.innerHTML = "";
+
+  const fuentes = [...new Set((questions || []).map(q => q.fuente || "Sin fuente"))]
+    .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
+
+  fuentes.forEach(fuente => {
+    const btn = document.createElement("button");
+    btn.textContent = fuente;
+    btn.className = "secondary fuente-btn";
+    btn.onclick = () => {
+      const key = String(fuente);
+      if (selectedExamSources.has(key)) {
+        selectedExamSources.delete(key);
+        btn.className = "secondary fuente-btn";
+      } else {
+        selectedExamSources.add(key);
+        btn.className = "secondary";
+      }
+    };
+    examSourceButtons.appendChild(btn);
+  });
+
+  examSourceModal.style.display = "flex";
+}
+
+function closeExamSourceModal() {
+  if (!examSourceModal) return;
+  examSourceModal.style.display = "none";
+}
+
+function startExamFromSources() {
+  if (!selectedExamSources.size) {
+    showAlert("Selecciona al menos una fuente.");
+    return;
+  }
+
+  const poolAll = (questions || []).filter(q =>
+    selectedExamSources.has(String(q.fuente || "Sin fuente"))
+  );
+
+  if (poolAll.length < 100) {
+    showAlert("No hay suficientes preguntas para un examen de 100.");
+    return;
+  }
+
+  shuffleArray(poolAll);
+  const pool = poolAll.slice(0, 100);
+
+  mode = "exam";
+  closeExamSourceModal();
+
+  startSession(pool, {
+    mode: "exam",
+    timeSeconds: 100 * 60,
+    countNonAnsweredAsWrongOnFinish: true,
+    meta: { fuentes: Array.from(selectedExamSources) }
+  });
 }
 
 // =======================
@@ -2220,11 +2439,12 @@ function startSession(pool, opts) {
   lastSessionAnswers = [];
   answeredIds = new Set();
 
+  const baseTestIds = currentTest.map(q => String(q.id));
   sessionOpts = {
     mode: opts.mode || mode,
     timeSeconds: Math.max(0, opts.timeSeconds || (currentTest.length * 60)),
     countNonAnsweredAsWrongOnFinish: !!opts.countNonAnsweredAsWrongOnFinish,
-    meta: opts.meta || {}
+    meta: { ...(opts.meta || {}), baseTestIds }
   };
 
   timeRemaining = sessionOpts.timeSeconds;
@@ -2476,6 +2696,10 @@ function finishTest(reason = "manual") {
   ttsStop();
   finalizeUnansweredAsPendingIfNeeded();
 
+  const nTotal = correctCount + wrongCount + noSeCount;
+  const scoreBruta = calcBruta(correctCount, wrongCount);
+  const score100 = calcNotaSobre100(correctCount, wrongCount, noSeCount);
+
   addHistoryEntry({
     date: new Date().toISOString(),
     mode,
@@ -2483,6 +2707,8 @@ function finishTest(reason = "manual") {
     correct: correctCount,
     wrong: wrongCount,
     noSe: noSeCount,
+    scoreBruta,
+    score100,
     reason
   });
 
@@ -2493,18 +2719,60 @@ function finishTest(reason = "manual") {
     <p><strong>Aciertos:</strong> ${correctCount}</p>
     <p><strong>Fallos:</strong> ${wrongCount}</p>
     <p><strong>No lo sé:</strong> ${noSeCount}</p>
+    <p><strong>Puntuación bruta:</strong> ${scoreBruta.toFixed(1)}</p>
+    <p><strong>Nota sobre 100:</strong> ${score100.toFixed(2)}</p>
+    <p><strong>Total preguntas:</strong> ${nTotal}</p>
 
     <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px;">
       <button id="btn-copy-test-text">Copiar test en portapapeles</button>
+      <button id="btn-repeat-test">Repetir test</button>
       <button id="btn-review-test">Repasar test</button>
     </div>
   `;
 
   document.getElementById("btn-copy-test-text").onclick = () => exportLastTestText("copy");
+  document.getElementById("btn-repeat-test").onclick = () => repeatLastTest();
   document.getElementById("btn-review-test").onclick = () => showReviewScreen();
 
   backToMenuBtnResults.onclick = showMainMenu;
   if (backToResultsBtn) backToResultsBtn.onclick = showResultsScreen;
+}
+
+function buildPoolFromIds(ids) {
+  const idToQ = new Map(questions.map(q => [String(q.id), q]));
+  return asArray(ids)
+    .map(id => idToQ.get(String(id)))
+    .filter(Boolean);
+}
+
+function repeatLastTest() {
+  const repeatMode = sessionOpts?.mode || mode || "practice";
+  const baseIds = sessionOpts?.meta?.baseTestIds;
+  let pool = [];
+
+  if (!baseIds || !baseIds.length) {
+    showAlert("No se pudo repetir el test porque no se encontro el pool original de esta sesion.");
+    return;
+  }
+
+  pool = buildPoolFromIds(baseIds);
+  if (pool.length !== baseIds.length) {
+    showAlert("No se pudo repetir el test porque faltan preguntas del pool original.");
+    return;
+  }
+
+  mode = repeatMode;
+  if (repeatMode === "perfection") {
+    perfectionQueue = [];
+    perfectionSet = new Set();
+  }
+
+  startSession(pool, {
+    mode: repeatMode,
+    timeSeconds: sessionOpts?.timeSeconds || (pool.length * 60),
+    countNonAnsweredAsWrongOnFinish: !!sessionOpts?.countNonAnsweredAsWrongOnFinish,
+    meta: { ...(sessionOpts?.meta || {}) }
+  });
 }
 
 // =======================
@@ -2813,7 +3081,7 @@ function showQuestionBank() {
     <div id="bank-results" style="margin-top:12px;"></div>
   `;
 
-  document.getElementById("bank-back").onclick = showMainMenu;
+  document.getElementById("bank-back").onclick = showConfigScreen;
   document.getElementById("bank-export-json").onclick = exportQuestionsJSON;
   document.getElementById("bank-import-questions").onclick = () => {
     clearImportTextarea();
@@ -3479,15 +3747,9 @@ function applyDarkModeToDocument() {
 }
 
 function injectDarkModeToggleIntoMainMenu() {
-  // Esto se llama desde showMainMenu() al final, para que el botón exista siempre
-  const extraBox = document.getElementById("main-extra");
-  if (!extraBox) return;
-
-  // Evitar duplicados
-  if (document.getElementById("btn-darkmode-toggle")) return;
-
-  const row = document.getElementById("main-row-2") || extraBox.querySelector(".row");
+  const row = document.getElementById("main-darkmode-row");
   if (!row) return;
+  row.innerHTML = "";
 
   const btn = document.createElement("button");
   btn.id = "btn-darkmode-toggle";
@@ -3498,17 +3760,7 @@ function injectDarkModeToggleIntoMainMenu() {
     setDarkModeEnabled(newVal);
     btn.textContent = newVal ? "Modo claro" : "Modo oscuro";
   };
-
   row.appendChild(btn);
-
-  if (!document.getElementById("btn-voice-settings")) {
-    const voiceBtn = document.createElement("button");
-    voiceBtn.id = "btn-voice-settings";
-    voiceBtn.className = "secondary";
-    voiceBtn.textContent = "Voz";
-    voiceBtn.onclick = showVoiceSettingsScreen;
-    row.appendChild(voiceBtn);
-  }
 }
 
 // Aplicar el modo al cargar la app (por si el usuario ya lo tenía activado)
@@ -3645,10 +3897,17 @@ function cssEscape(val) {
 // =======================
 // EVENTS (HTML)
 // =======================
-startTestBtn.onclick = () => showTemaSelectionScreen("practice");
+startTestBtn.onclick = () => showTemaSelectionScreen();
 quickTest10Btn.onclick = () => startQuickTest(10, 10);
 quickTest20Btn.onclick = () => startQuickTest(20, 20);
+if (openTestModalBtn) openTestModalBtn.onclick = openTestStartModal;
+if (closeTestModalBtn) closeTestModalBtn.onclick = closeTestStartModal;
+if (examStartBtn) examStartBtn.onclick = () => startExamFromSources();
+if (examCloseBtn) examCloseBtn.onclick = closeExamSourceModal;
 if (voiceSettingsBtn) voiceSettingsBtn.onclick = showVoiceSettingsScreen;
+const openConfigBtn = document.getElementById("btn-open-config");
+if (openConfigBtn) openConfigBtn.onclick = () => showConfigScreen();
+if (backConfigBtn) backConfigBtn.onclick = showMainMenu;
 openImportBtn.onclick = () => {
   // ✅ al entrar, vacío para pruebas (como pediste)
   clearImportTextarea();
@@ -3664,7 +3923,7 @@ btnImportQuestions.onclick = importQuestionsFromTextarea;
 btnClearImport.onclick = clearImportTextarea;
 btnClearAdded.onclick = clearAddedQuestions;
 btnBackFromImport.onclick = showMainMenu;
-if (voiceSettingsBackBtn) voiceSettingsBackBtn.onclick = showMainMenu;
+if (voiceSettingsBackBtn) voiceSettingsBackBtn.onclick = showConfigScreen;
 
 // =======================
 // INIT
@@ -3681,6 +3940,8 @@ function handleEscBack() {
   }
 
   const candidates = [
+    document.getElementById("btn-close-test-modal"),
+    document.getElementById("btn-exam-close"),
     document.getElementById("back-to-results-btn"),
     document.getElementById("back-to-menu-btn"),
     document.getElementById("btn-back-main"),
@@ -3722,20 +3983,37 @@ fetch("frases_motivadoras.json")
     console.warn("No se pudieron cargar las frases motivadoras", err);
   });
 
-fetch("questions.json")
+fetch("questions_manifest.json")
   .then(res => {
-    if (!res.ok) throw new Error(`HTTP ${res.status} cargando questions.json`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} cargando questions_manifest.json`);
     return res.json();
   })
-  .then(data => {
-    questionsBase = Array.isArray(data) ? data : [];
+  .then(manifest => {
+    const files = Array.isArray(manifest?.files) ? manifest.files.filter(Boolean) : [];
+    if (!files.length) throw new Error("Manifest vacio o sin 'files'");
+
+    return Promise.all(
+      files.map(file =>
+        fetch(file).then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status} cargando ${file}`);
+          return res.json();
+        })
+      )
+    );
+  })
+  .then(datasets => {
+    const merged = [];
+    for (const data of datasets) {
+      if (Array.isArray(data)) merged.push(...data);
+    }
+    questionsBase = merged;
     mergeQuestions();
     applyDeletedFilter();
     refreshDbCountPill();
     showMainMenu();
   })
   .catch(err => {
-    showAlert("Error cargando questions.json");
+    showAlert("Error cargando questions_manifest.json o alguno de sus archivos");
     console.error(err);
     questionsBase = [];
     mergeQuestions();

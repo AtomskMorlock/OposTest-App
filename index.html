@@ -32,6 +32,7 @@
     #no-btn { width: 120px; background: white; }
     .numq-btn, .time-btn { width: 70px; }
     .secondary.numq-btn, .secondary.time-btn, .secondary.fuente-btn { background: white; }
+    #test-menu .fuente-btn { width: 160px; }
     textarea { width: 100%; box-sizing: border-box; border-radius: 10px; border: 1px solid #b8d8ff; padding: 10px; }
     label { cursor: pointer; }
     hr { border: 0; border-top: 1px solid #e6eefc; margin: 12px 0; }
@@ -52,15 +53,12 @@
   <h1>Facultativo de bibliotecas</h1>
 
   <div class="row" id="main-primary-row">
-    <button id="btn-quick-test-10" class="success">Test rápido 10</button>
-    <button id="btn-quick-test-20" class="success">Test rápido 20</button>
+    <button id="btn-open-test-modal" class="success">Iniciar test</button>
   </div>
-
-  <div class="row" id="main-row-test">
-    <button id="btn-start-test" class="success">Test</button>
+  <div class="row" id="main-config-row">
+    <button id="btn-open-config" class="secondary">Configuración</button>
   </div>
-  <div class="row" id="main-row-exam"></div>
-  <div class="row" id="main-row-paused"></div>
+  <div class="row" id="main-darkmode-row"></div>
 
   <div id="main-extra"></div>
 
@@ -71,8 +69,51 @@
   </div>
 </div>
 
+<!-- MODAL INICIAR TEST -->
+<div id="test-start-modal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="text-align:center;">Elige tipo de test</div>
+    <div class="row" id="modal-row-quick" style="justify-content:center;">
+      <button id="btn-quick-test-10" class="secondary">Test rápido 10</button>
+      <button id="btn-quick-test-20" class="secondary">Test rápido 20</button>
+    </div>
+    <div class="row" id="modal-row-main" style="justify-content:center;">
+      <button id="btn-start-test" class="secondary">Test personalizado</button>
+      <button id="btn-review" class="secondary">Repasar pendientes</button>
+    </div>
+    <div class="row" id="modal-row-modes" style="justify-content:center;">
+      <button id="btn-exam" class="secondary">Modo examen</button>
+    </div>
+    <div class="row" id="modal-row-paused" style="justify-content:center;"></div>
+    <div class="row" style="justify-content:center;margin-top:10px;">
+      <button id="btn-close-test-modal" class="secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MODO EXAMEN POR FUENTE -->
+<div id="exam-source-modal" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-title" style="text-align:center;">Selecciona fuentes</div>
+    <div class="row" id="exam-source-buttons" style="justify-content:center;"></div>
+    <div class="row" style="justify-content:center;margin-top:10px;">
+      <button id="btn-exam-start" class="secondary">Iniciar test</button>
+      <button id="btn-exam-close" class="secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MENÚ TEST -->
 <div id="test-menu" class="card" style="display:none"></div>
+
+<!-- CONFIGURACIÓN -->
+<div id="config-container" class="card" style="display:none">
+  <h2 style="text-align:center;">Configuración</h2>
+  <div class="row" id="config-actions" style="justify-content:center;flex-direction:column;align-items:center;"></div>
+  <div class="row" style="justify-content:center;margin-top:10px;">
+    <button id="btn-back-config" class="secondary">Volver</button>
+  </div>
+</div>
 
 <!-- AJUSTES VOZ -->
 <div id="voice-settings-container" class="card" style="display:none">

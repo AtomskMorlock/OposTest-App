@@ -1,0 +1,146 @@
+[
+  {
+    "id": "A2.2024.001",
+    "tema": "85. Invención y difusión de la imprenta. Los incunables. La imprenta en España durante el siglo XV.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "¿Cuál fue el primer autor español que vio publicada su obra en una edición incunable?",
+    "opciones": [
+      "Rodrigo Sánchez de Arévalo, con su Speculum vitae humanae.",
+      "Juan de Torquemada, con sus Meditationes.",
+      "Alonso de Palencia, con la Batalla campal de los perros contra los lobos.",
+      "Hernando del Pulgar y sus Coplas de Mingo Revulgo."
+    ],
+    "respuesta_correcta": 1,
+    "explicacion": "Juan de Torquemada es considerado el primer autor español cuya obra se publicó como incunable, concretamente sus Meditationes, impresas en el siglo XV."
+  },
+  {
+    "id": "A2.2024.002",
+    "tema": "85. Invención y difusión de la imprenta. Los incunables. La imprenta en España durante el siglo XV.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "¿Qué tipógrafo de la imprenta incunable recibía abundantes encargos del Cabildo de Burgos?",
+    "opciones": [
+      "Lambert Palmart.",
+      "Antonio de Centenera.",
+      "Fadrique de Basilea.",
+      "Estanislao Polono."
+    ],
+    "respuesta_correcta": 2,
+    "explicacion": "Fadrique de Basilea fue uno de los impresores más activos en la Castilla del siglo XV y recibió numerosos encargos del Cabildo de Burgos."
+  },
+  {
+    "id": "A2.2024.003",
+    "tema": "85. Invención y difusión de la imprenta. Los incunables. La imprenta en España durante el siglo XV.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "El operario de la imprenta manual encargado de entintar suficiente y adecuadamente la forma con las balas, evitando las manchas en el pliego era el:",
+    "opciones": [
+      "Componedor.",
+      "Ensayador.",
+      "Tirador.",
+      "Batidor."
+    ],
+    "respuesta_correcta": 3,
+    "explicacion": "El batidor era el operario encargado de entintar la forma con las balas en la imprenta manual, asegurando una correcta distribución de la tinta."
+  },
+  {
+    "id": "A2.2024.004",
+    "tema": "86. El libro en el siglo XVI.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "¿A quiénes debemos los primeros libros impresos en Madrid en el año 1566?",
+    "opciones": [
+      "Pierres Cosin y Alonso Gómez.",
+      "Francisco Sánchez y Pierres Cosin.",
+      "Alonso Gómez y Pedro Madrigal.",
+      "Juan de la Cuesta y Jorge Coci."
+    ],
+    "respuesta_correcta": 0,
+    "explicacion": "Los primeros libros impresos en Madrid en 1566 se deben a Pierres Cosin y Alonso Gómez, considerados pioneros de la imprenta madrileña."
+  },
+  {
+    "id": "A2.2024.005",
+    "tema": "87. Las bibliotecas en el siglo XVI.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "¿De cuál de las siguientes bibliotecas fue su responsable y, además, elaboró su primer catálogo el teólogo y políglota Benito Arias Montano?",
+    "opciones": [
+      "Real Biblioteca del Monasterio de El Escorial.",
+      "Biblioteca Colombina.",
+      "Real Biblioteca Pública.",
+      "Biblioteca de la Universidad Complutense de Alcalá de Henares."
+    ],
+    "respuesta_correcta": 0,
+    "explicacion": "Benito Arias Montano fue responsable de la Real Biblioteca del Monasterio de El Escorial y elaboró su primer catálogo en el siglo XVI."
+  },
+  {
+    "id": "A2.2024.006",
+    "tema": "96. El libro y la edición en el siglo XX.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "¿Qué editorial publicó la Colección Universal en la segunda década del siglo XX?",
+    "opciones": [
+      "Calpe.",
+      "Destino.",
+      "Alianza.",
+      "Planeta."
+    ],
+    "respuesta_correcta": 0,
+    "explicacion": "La Colección Universal fue publicada por la editorial Calpe y tuvo un papel destacado en la difusión cultural en las primeras décadas del siglo XX."
+  },
+  {
+    "id": "A2.2024.007",
+    "tema": "96. El libro y la edición en el siglo XX.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "¿Quién fue el creador del libro de bolsillo con su colección Penguin Books en 1935?",
+    "opciones": [
+      "Allen Lane.",
+      "Edward Elgar.",
+      "Taylor & Francis.",
+      "Jacob Richard Clarke."
+    ],
+    "respuesta_correcta": 0,
+    "explicacion": "Allen Lane fundó Penguin Books en 1935 y popularizó el libro de bolsillo como formato accesible para el gran público."
+  },
+  {
+    "id": "A2.2024.008",
+    "tema": "97. La industria del libro y la edición en la actualidad. Libros electrónicos, plataformas y servicios. Las licencias digitales. Gestión de derechos digitales. DRM. Mercado editorial: agendes de la producción y difusión del libro.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "Indique la respuesta correcta en relación con los libros electrónicos:",
+    "opciones": [
+      "eBiblio es un servicio de pago de préstamo de libros electrónicos en línea ofrecido a través de las bibliotecas universitarias.",
+      "Sólo se puede acceder al catálogo de eBiblio si tienes instalada la app en el dispositivo del teléfono móvil.",
+      "En eBiblio el período de préstamo de los libros electrónicos, audiolibros, periódicos y revistas es de 21 días.",
+      "eBiblio es un servicio gratuito de libros electrónicos en línea ofrecido a través de las bibliotecas públicas españolas."
+    ],
+    "respuesta_correcta": 3,
+    "explicacion": "eBiblio es un servicio gratuito de préstamo digital ofrecido por las bibliotecas públicas españolas, accesible a los usuarios con carné de biblioteca."
+  },
+  {
+    "id": "A2.2024.009",
+    "tema": "91. El libro en el siglo XVIII.",
+    "bloque": "Bloque 5. Historia del Libro y de las Bibliotecas",
+    "fuente": "A2 2024",
+    "modelo": "A",
+    "pregunta": "La obra Las Eróticas de Esteban Manuel de Villegas fue impresa en 1774 por:",
+    "opciones": [
+      "Antonio de Sancha.",
+      "Gabriel Sancha.",
+      "Indalecio Sancha.",
+      "Joaquín Ibarra."
+    ],
+    "respuesta_correcta": 0,
+    "explicacion": "La edición de Las Eróticas de Esteban Manuel de Villegas de 1774 fue realizada por Antonio de Sancha, destacado impresor del siglo XVIII."
+  }
+]
