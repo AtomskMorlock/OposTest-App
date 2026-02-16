@@ -245,6 +245,7 @@ let viewState = "question"; // question | feedback
 let currentShuffledOptions = [];
 let lastSelectedText = null;
 let lastCorrectText = null;
+let homeConfigOpenTimer = null;
 
 // =======================
 // DOM (IDs del HTML que has pegado)
@@ -273,6 +274,7 @@ const noSeBtn = document.getElementById("no-btn");
 const timerDisplay = document.getElementById("timer");
 const modePill = document.getElementById("mode-pill");
 const motivationalPhraseEl = document.getElementById("motivational-phrase");
+const appVersionBadgeEl = document.getElementById("app-version-badge");
 
 const ttsPanel = document.getElementById("tts-panel");
 const ttsVoiceList = document.getElementById("tts-voice-list");
@@ -290,6 +292,8 @@ const examSourceModal = document.getElementById("exam-source-modal");
 const examSourceButtons = document.getElementById("exam-source-buttons");
 const examStartBtn = document.getElementById("btn-exam-start");
 const examCloseBtn = document.getElementById("btn-exam-close");
+
+let openTestModalTimer = null;
 const voiceSettingsBtn = document.getElementById("btn-voice-settings");
 const voiceSettingsBackBtn = document.getElementById("btn-voice-back");
 const openImportBtn = document.getElementById("btn-open-import");
@@ -315,17 +319,20 @@ const modalTitle = document.getElementById("app-modal-title");
 const modalMessage = document.getElementById("app-modal-message");
 const modalActions = document.getElementById("app-modal-actions");
 
-function openModal({ title, message, actions, titleAlign }) {
+function openModal({ title, message, actions, titleAlign, actionsClassName, hideTitle = false, hideMessage = false }) {
   return new Promise(resolve => {
     if (!modalOverlay || !modalTitle || !modalMessage || !modalActions) {
       resolve(actions?.[0]?.value ?? null);
       return;
     }
 
-    modalTitle.textContent = title || "Aviso";
-    modalTitle.style.textAlign = titleAlign || "";
-    modalMessage.textContent = message || "";
+    modalTitle.style.display = hideTitle ? "none" : "";
+    modalMessage.style.display = hideMessage ? "none" : "";
+    modalTitle.textContent = hideTitle ? "" : (title ?? "Aviso");
+    modalTitle.style.textAlign = hideTitle ? "" : (titleAlign || "");
+    modalMessage.textContent = hideMessage ? "" : (message || "");
     modalActions.innerHTML = "";
+    modalActions.className = `row modal-actions${actionsClassName ? ` ${actionsClassName}` : ""}`;
 
     const btns = [];
 
@@ -405,6 +412,56 @@ function showConfirm(message, opts = {}) {
   });
 }
 
+const buttonPressTimers = new WeakMap();
+const elementPressTimers = new WeakMap();
+function flashElementPress(el) {
+  if (!(el instanceof HTMLElement)) return;
+  const prev = elementPressTimers.get(el);
+  if (prev) clearTimeout(prev);
+  el.classList.remove("panel-press-flash");
+  void el.offsetWidth;
+  el.classList.add("panel-press-flash");
+  const timerId = setTimeout(() => {
+    el.classList.remove("panel-press-flash");
+    elementPressTimers.delete(el);
+  }, 150);
+  elementPressTimers.set(el, timerId);
+}
+
+function flashButtonPress(btn) {
+  if (!(btn instanceof HTMLElement) || btn.disabled) return;
+  const prev = buttonPressTimers.get(btn);
+  if (prev) clearTimeout(prev);
+  btn.classList.remove("btn-press-flash");
+  // Reflow para reiniciar la animación si se pulsa repetidamente.
+  void btn.offsetWidth;
+  btn.classList.add("btn-press-flash");
+  const timerId = setTimeout(() => {
+    btn.classList.remove("btn-press-flash");
+    buttonPressTimers.delete(btn);
+  }, 150);
+  buttonPressTimers.set(btn, timerId);
+
+  if (btn.id === "btn-open-test-modal") {
+    const homeStartPanel = document.getElementById("home-start-panel");
+    flashElementPress(homeStartPanel);
+  } else if (btn.id === "home-btn-quick") {
+    const homeQuickRow = document.getElementById("home-quick-row");
+    flashElementPress(homeQuickRow);
+  }
+}
+
+document.addEventListener("pointerdown", e => {
+  const btn = e.target instanceof Element ? e.target.closest("button") : null;
+  if (btn) flashButtonPress(btn);
+}, { passive: true });
+
+document.addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const btn = e.target instanceof Element ? e.target.closest("button") : null;
+  if (btn) flashButtonPress(btn);
+});
+
 // =======================
 // UTIL: STORAGE
 // =======================
@@ -436,6 +493,9 @@ let ttsVoices = [];
 let ttsVoiceRetryCount = 0;
 let ttsUserInteracted = false;
 let ttsLastQuestionId = null;
+let ttsSpeakSeq = 0;
+let ttsActiveMeta = null;
+let ttsPausedResume = null;
 
 const MOTIVATIONAL_FALLBACK = [
   "No estás procrastinando: estás entrenando la paciencia del tribunal.",
@@ -480,15 +540,125 @@ const MOTIVATIONAL_FALLBACK = [
   "Algún día dirás: menos mal que no lo dejé."
 ];
 let motivationalPhrases = MOTIVATIONAL_FALLBACK.slice();
+let lastMotivationalPhrase = "";
+let motivationalFadeTimer = null;
+const MOTIVATIONAL_MAX_LINE_CHARS = 36;
+const MOTIVATIONAL_SPLIT_WINDOW = 14;
 
-function getRandomMotivationalPhrase() {
-  const list = motivationalPhrases && motivationalPhrases.length ? motivationalPhrases : MOTIVATIONAL_FALLBACK;
-  return list[Math.floor(Math.random() * list.length)];
+function findMotivationalMiddlePunctuationIndex(text) {
+  const punctuationIndexes = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === "," || ch === "." || ch === ":") punctuationIndexes.push(i);
+  }
+  if (!punctuationIndexes.length) return -1;
+
+  const minMiddle = Math.floor(text.length * 0.2);
+  const maxMiddle = Math.ceil(text.length * 0.8);
+  const middleCandidates = punctuationIndexes.filter(idx => idx >= minMiddle && idx <= maxMiddle);
+  const candidates = middleCandidates.length
+    ? middleCandidates
+    : punctuationIndexes.filter(idx => idx > 0 && idx < text.length - 1);
+  if (!candidates.length) return -1;
+
+  const middle = (text.length - 1) / 2;
+  let bestIdx = candidates[0];
+  let bestDistance = Math.abs(bestIdx - middle);
+
+  for (let i = 1; i < candidates.length; i += 1) {
+    const distance = Math.abs(candidates[i] - middle);
+    if (distance < bestDistance) {
+      bestIdx = candidates[i];
+      bestDistance = distance;
+    }
+  }
+  return bestIdx;
 }
 
-function renderMotivationalPhrase() {
+function splitMotivationalLine(line, maxChars = MOTIVATIONAL_MAX_LINE_CHARS) {
+  const normalized = String(line || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return [];
+  if (normalized.length <= maxChars) return [normalized];
+
+  const target = Math.floor(normalized.length / 2);
+  const minSearch = Math.max(1, target - MOTIVATIONAL_SPLIT_WINDOW);
+  const maxSearch = Math.min(normalized.length - 1, target + MOTIVATIONAL_SPLIT_WINDOW);
+  let splitAt = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let idx = minSearch; idx <= maxSearch; idx += 1) {
+    if (normalized[idx] !== " ") continue;
+    const distance = Math.abs(idx - target);
+    if (distance < bestDistance) {
+      splitAt = idx;
+      bestDistance = distance;
+    }
+  }
+  if (splitAt === -1) splitAt = target;
+
+  const left = normalized.slice(0, splitAt).trim();
+  const right = normalized.slice(splitAt).trim();
+  const chunks = [];
+  if (left) chunks.push(...splitMotivationalLine(left, maxChars));
+  if (right) chunks.push(...splitMotivationalLine(right, maxChars));
+  return chunks;
+}
+
+function formatMotivationalPhrase(phrase) {
+  const normalized = String(phrase || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+
+  const punctuationIdx = findMotivationalMiddlePunctuationIndex(normalized);
+  if (punctuationIdx === -1) return splitMotivationalLine(normalized).join("\n");
+
+  const left = normalized.slice(0, punctuationIdx + 1).trim();
+  const right = normalized.slice(punctuationIdx + 1).trim();
+  const lines = [];
+  lines.push(...splitMotivationalLine(left));
+  if (right) lines.push(...splitMotivationalLine(right));
+  return lines.join("\n");
+}
+
+function getRandomMotivationalPhrase(excludePhrase = "") {
+  const list = motivationalPhrases && motivationalPhrases.length ? motivationalPhrases : MOTIVATIONAL_FALLBACK;
+  if (!list.length) return "";
+  if (list.length === 1) return list[0];
+
+  const excluded = String(excludePhrase || "").trim();
+  const candidates = excluded ? list.filter(item => item !== excluded) : list;
+  const pool = candidates.length ? candidates : list;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function renderMotivationalPhrase(forceDifferent = false, animated = false) {
   if (!motivationalPhraseEl) return;
-  motivationalPhraseEl.textContent = getRandomMotivationalPhrase();
+
+  const setNextPhrase = () => {
+    const nextPhrase = forceDifferent
+      ? getRandomMotivationalPhrase(lastMotivationalPhrase)
+      : getRandomMotivationalPhrase();
+    lastMotivationalPhrase = nextPhrase;
+    motivationalPhraseEl.textContent = formatMotivationalPhrase(nextPhrase);
+  };
+
+  if (!animated) {
+    if (motivationalFadeTimer) {
+      clearTimeout(motivationalFadeTimer);
+      motivationalFadeTimer = null;
+    }
+    motivationalPhraseEl.classList.remove("is-fading-out");
+    setNextPhrase();
+    return;
+  }
+
+  if (motivationalFadeTimer) clearTimeout(motivationalFadeTimer);
+  motivationalPhraseEl.classList.add("is-fading-out");
+
+  motivationalFadeTimer = setTimeout(() => {
+    setNextPhrase();
+    motivationalPhraseEl.classList.remove("is-fading-out");
+    motivationalFadeTimer = null;
+  }, 170);
 }
 
 function ttsLoadSettings() {
@@ -540,9 +710,11 @@ function ttsGetSpanishVoicePreferred(voices) {
 }
 
 function ttsPopulateVoiceButtons() {
-  if (!ttsVoiceList) return;
+  const targets = [ttsVoiceList, document.getElementById("home-tts-voice-list")]
+    .filter((el, idx, arr) => !!el && arr.indexOf(el) === idx);
+  if (!targets.length) return;
 
-  ttsVoiceList.innerHTML = "";
+  targets.forEach(el => { el.innerHTML = ""; });
 
   const preferredNames = ["mónica", "monica", "google español"];
   const esEsVoices = ttsVoices.filter(v => String(v.lang || "").toLowerCase() === "es-es");
@@ -551,10 +723,12 @@ function ttsPopulateVoiceButtons() {
   );
 
   if (!allowedVoices.length) {
-    const msg = document.createElement("div");
-    msg.className = "small";
-    msg.textContent = "No están disponibles las voces Mónica o Google español.";
-    ttsVoiceList.appendChild(msg);
+    targets.forEach(target => {
+      const msg = document.createElement("div");
+      msg.className = "small";
+      msg.textContent = "No están disponibles las voces Mónica o Google español.";
+      target.appendChild(msg);
+    });
     return;
   }
 
@@ -563,19 +737,22 @@ function ttsPopulateVoiceButtons() {
     ttsSaveSettings();
   }
 
-  allowedVoices.forEach(v => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = ttsSettings.voiceURI === v.voiceURI ? "success" : "secondary";
-    btn.textContent = v.name;
-    btn.onclick = () => {
-      ttsUserInteracted = true;
-      ttsSettings.voiceURI = v.voiceURI;
-      ttsSaveSettings();
-      ttsPopulateVoiceButtons();
-      ttsSpeakPreview(getRandomMotivationalPhrase(), v.voiceURI);
-    };
-    ttsVoiceList.appendChild(btn);
+  targets.forEach(target => {
+    allowedVoices.forEach(v => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = ttsSettings.voiceURI === v.voiceURI ? "success" : "secondary";
+      if (target.id === "home-tts-voice-list") btn.classList.add("home-voice-choice");
+      btn.textContent = v.name;
+      btn.onclick = () => {
+        ttsUserInteracted = true;
+        ttsSettings.voiceURI = v.voiceURI;
+        ttsSaveSettings();
+        ttsPopulateVoiceButtons();
+        ttsSpeakPreview(getRandomMotivationalPhrase(), v.voiceURI);
+      };
+      target.appendChild(btn);
+    });
   });
 }
 
@@ -583,6 +760,16 @@ function ttsApplyUIState() {
   const supported = "speechSynthesis" in window;
   if (ttsRateRange) ttsRateRange.value = String(ttsSettings.rate || 1);
   if (ttsPitchRange) ttsPitchRange.value = String(ttsSettings.pitch || 1);
+  const homeTtsRate = document.getElementById("home-tts-rate");
+  const homeTtsPitch = document.getElementById("home-tts-pitch");
+  if (homeTtsRate) {
+    homeTtsRate.value = String(ttsSettings.rate || 1);
+    homeTtsRate.disabled = !supported;
+  }
+  if (homeTtsPitch) {
+    homeTtsPitch.value = String(ttsSettings.pitch || 1);
+    homeTtsPitch.disabled = !supported;
+  }
 
   if (ttsReadBtn) {
     ttsReadBtn.disabled = !supported;
@@ -593,13 +780,17 @@ function ttsApplyUIState() {
 
 function ttsRefreshReadButtonLabel() {
   if (!ttsReadBtn) return;
-  ttsReadBtn.textContent = "Leer";
+  ttsReadBtn.innerHTML = `<span class="tts-read-icon" aria-hidden="true">🔊</span>`;
 }
 
 function ttsSpeak(text, opts = {}) {
   if (!("speechSynthesis" in window)) return;
   if (!ttsSettings.enabled) return;
   if (!text) return;
+
+  ttsSpeakSeq += 1;
+  const seq = ttsSpeakSeq;
+  const meta = opts && opts.meta && typeof opts.meta === "object" ? opts.meta : null;
 
   window.speechSynthesis.cancel();
 
@@ -623,9 +814,40 @@ function ttsSpeak(text, opts = {}) {
   if (utter.voice && utter.voice.lang) utter.lang = utter.voice.lang;
   else utter.lang = "es-ES";
 
-  utter.onstart = () => ttsRefreshReadButtonLabel();
-  utter.onend = () => ttsRefreshReadButtonLabel();
-  utter.onerror = () => ttsRefreshReadButtonLabel();
+  utter.onstart = () => {
+    ttsActiveMeta = {
+      seq,
+      active: true,
+      finished: false,
+      type: typeof meta?.type === "string" ? meta.type : "generic",
+      questionId: typeof meta?.questionId === "string" ? meta.questionId : null,
+      questionTextLength: typeof meta?.questionText === "string" ? meta.questionText.length : 0,
+      hasOptions: typeof meta?.optionsText === "string" ? meta.optionsText.length > 0 : false,
+      totalTextLength: String(text).length,
+      lastBoundary: 0
+    };
+    ttsRefreshReadButtonLabel();
+  };
+  utter.onboundary = e => {
+    if (!ttsActiveMeta || ttsActiveMeta.seq !== seq) return;
+    if (typeof e.charIndex === "number" && e.charIndex >= 0) {
+      ttsActiveMeta.lastBoundary = e.charIndex;
+    }
+  };
+  utter.onend = () => {
+    if (ttsActiveMeta && ttsActiveMeta.seq === seq) {
+      ttsActiveMeta.active = false;
+      ttsActiveMeta.finished = true;
+    }
+    ttsRefreshReadButtonLabel();
+  };
+  utter.onerror = () => {
+    if (ttsActiveMeta && ttsActiveMeta.seq === seq) {
+      ttsActiveMeta.active = false;
+      ttsActiveMeta.finished = false;
+    }
+    ttsRefreshReadButtonLabel();
+  };
 
   window.speechSynthesis.speak(utter);
 }
@@ -662,7 +884,65 @@ function ttsSpeakPreview(text, voiceURI) {
 function ttsStop() {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
+  if (ttsActiveMeta) ttsActiveMeta.active = false;
   ttsRefreshReadButtonLabel();
+}
+
+function ttsEnsureSentence(text) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  if (/[.!?…]$/.test(normalized)) return normalized;
+  return `${normalized}.`;
+}
+
+function ttsBuildOptionsText(options) {
+  const letters = ["A", "B", "C", "D"];
+  return (options || [])
+    .filter(opt => String(opt || "").trim())
+    .map((opt, i) => `${letters[i] || String(i + 1)}. ${ttsEnsureSentence(opt)}`)
+    .join(" ");
+}
+
+function ttsPrepareResumeFromPause() {
+  ttsPausedResume = null;
+  const state = ttsActiveMeta;
+  if (!state || !state.active) return;
+
+  const q = currentTest[currentIndex];
+  if (!q) return;
+  const currentQuestionId = String(q.id);
+  if (state.questionId !== currentQuestionId) return;
+
+  let part = null;
+  if (state.type === "questionOnly") {
+    part = "question";
+  } else if (state.type === "optionsOnly") {
+    part = "options";
+  } else if (state.type === "question") {
+    const boundary = Math.max(0, Number(state.lastBoundary) || 0);
+    if (boundary < state.questionTextLength) part = "question";
+    else if (state.hasOptions) part = "options";
+  }
+
+  if (!part) return;
+  ttsPausedResume = { questionId: currentQuestionId, part };
+}
+
+function ttsResumeAfterPauseIfNeeded() {
+  const resume = ttsPausedResume;
+  ttsPausedResume = null;
+  if (!resume || !ttsSettings.enabled) return;
+
+  const q = currentTest[currentIndex];
+  if (!q || String(q.id) !== resume.questionId) return;
+
+  if (resume.part === "question") {
+    ttsSpeakOnlyQuestion(q);
+    return;
+  }
+  if (resume.part === "options") {
+    ttsSpeakOnlyOptions(q);
+  }
 }
 
 function ttsSpeakQuestion(q, index, total) {
@@ -670,18 +950,30 @@ function ttsSpeakQuestion(q, index, total) {
   const options = currentShuffledOptions && currentShuffledOptions.length
     ? currentShuffledOptions
     : (q.opciones || []);
-  const letters = ["A", "B", "C", "D"];
-  const optionsText = options
-    .map((opt, i) => `Opción ${letters[i] || String(i + 1)}: ${opt}.`)
-    .join(" ");
-  const text = `Pregunta ${index} de ${total}. ${q.pregunta}. Opciones: ${optionsText}`;
-  ttsSpeak(text);
+  const optionsText = ttsBuildOptionsText(options);
+  const questionText = ttsEnsureSentence(q.pregunta);
+  const text = optionsText ? `${questionText} ${optionsText}` : questionText;
+  ttsSpeak(text, {
+    meta: {
+      type: "question",
+      questionId: String(q.id),
+      questionText,
+      optionsText
+    }
+  });
 }
 
 function ttsSpeakOnlyQuestion(q, index, total) {
   if (!q) return;
-  const text = `Pregunta ${index} de ${total}. ${q.pregunta}.`;
-  ttsSpeak(text);
+  const text = ttsEnsureSentence(q.pregunta);
+  ttsSpeak(text, {
+    meta: {
+      type: "questionOnly",
+      questionId: String(q.id),
+      questionText: text,
+      optionsText: ""
+    }
+  });
 }
 
 function ttsSpeakOnlyOptions(q) {
@@ -689,17 +981,19 @@ function ttsSpeakOnlyOptions(q) {
   const options = currentShuffledOptions && currentShuffledOptions.length
     ? currentShuffledOptions
     : (q.opciones || []);
-  const letters = ["A", "B", "C", "D"];
-  const optionsText = options
-    .map((opt, i) => `Opción ${letters[i] || String(i + 1)}: ${opt}.`)
-    .join(" ");
-  const text = `Opciones: ${optionsText}`;
-  ttsSpeak(text);
+  const text = ttsBuildOptionsText(options);
+  ttsSpeak(text, {
+    meta: {
+      type: "optionsOnly",
+      questionId: String(q.id),
+      questionText: "",
+      optionsText: text
+    }
+  });
 }
 
 function ttsMaybeAutoRead(q) {
   if (!ttsSettings.enabled) return;
-  if (!ttsUserInteracted) return;
   if (viewState !== "question") return;
   if (!q) return;
   const idStr = String(q.id);
@@ -714,6 +1008,7 @@ function ttsBindUI() {
       ttsUserInteracted = true;
       ttsSettings.rate = Number(ttsRateRange.value) || 1;
       ttsSaveSettings();
+      ttsApplyUIState();
     };
   }
 
@@ -722,6 +1017,7 @@ function ttsBindUI() {
       ttsUserInteracted = true;
       ttsSettings.pitch = Number(ttsPitchRange.value) || 1;
       ttsSaveSettings();
+      ttsApplyUIState();
     };
   }
 
@@ -893,6 +1189,87 @@ function calcNotaSobre100(correct, wrong, noSe) {
 
 function format1Comma(n) {
   return Number(n || 0).toFixed(1).replace(".", ",");
+}
+
+function getLocalDaySerial(dateObj) {
+  if (!(dateObj instanceof Date) || isNaN(dateObj)) return null;
+  return Math.floor(
+    Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()) / 86400000
+  );
+}
+
+function buildHomeLastTestInfo(entries) {
+  const rows = asArray(entries)
+    .filter(e => e && e.finished !== false)
+    .filter(e => ((Number(e?.correct) || 0) + (Number(e?.wrong) || 0) + (Number(e?.noSe) || 0)) > 0)
+    .map(e => {
+      const d = new Date(e.date);
+      const serial = getLocalDaySerial(d);
+      if (!d || isNaN(d) || serial === null) return null;
+      return { ts: d.getTime(), day: serial };
+    })
+    .filter(Boolean);
+
+  if (!rows.length) {
+    return { displayText: "Sin tests finalizados", isStreak: false };
+  }
+
+  const last = rows.reduce((best, cur) => (cur.ts > best.ts ? cur : best), rows[0]);
+  const todaySerial = getLocalDaySerial(new Date());
+  const daysAgo = Math.max(0, Number(todaySerial) - Number(last.day));
+
+  const daySet = new Set(rows.map(r => r.day));
+  let streak = 0;
+  if (daySet.has(todaySerial)) {
+    for (let d = todaySerial; daySet.has(d); d -= 1) streak += 1;
+  }
+
+  if (streak > 0) {
+    return {
+      displayText: `Racha: ${streak} ${streak === 1 ? "día" : "días"}`,
+      isStreak: true
+    };
+  }
+
+  return {
+    displayText: `Último test hace ${daysAgo} ${daysAgo === 1 ? "día" : "días"}`,
+    isStreak: false
+  };
+}
+
+function getAppVersion() {
+  return String(window.APP_VERSION || "").trim();
+}
+
+function renderAppVersionBadge() {
+  if (!appVersionBadgeEl) return;
+  const version = getAppVersion();
+  appVersionBadgeEl.textContent = version ? `v${version}` : "";
+}
+
+function bumpVersion(type) {
+  const version = getAppVersion();
+  const parts = version.split(".").map(v => Number(v));
+  if (parts.length !== 3 || parts.some(v => !Number.isInteger(v) || v < 0)) {
+    throw new Error("APP_VERSION inválida");
+  }
+  let [major, minor, patch] = parts;
+  if (type === "patch") {
+    patch += 1;
+  } else if (type === "minor") {
+    minor += 1;
+    patch = 0;
+  } else if (type === "major") {
+    major += 1;
+    minor = 0;
+    patch = 0;
+  } else {
+    throw new Error("Tipo de incremento inválido");
+  }
+  const next = `${major}.${minor}.${patch}`;
+  window.APP_VERSION = next;
+  renderAppVersionBadge();
+  return next;
 }
 
 // =======================
@@ -1205,6 +1582,10 @@ function refreshDbCountPill() {
 // (No redefinir getExistingIdSet ni prunePendingGhostIds aquí)
 
 function hideAll() {
+  closeHomeStartPanel();
+  closeHomeConfigPanel();
+  closeHomeVoicePanel();
+  document.body.classList.remove("is-home-screen");
   mainMenu.style.display = "none";
   testMenu.style.display = "none";
   testContainer.style.display = "none";
@@ -1217,14 +1598,169 @@ function hideAll() {
   importContainer.style.display = "none";
 }
 
+function ensureHomeStarsLayer() {
+  if (!mainMenu) return;
+  let stars = mainMenu.querySelector(".stars");
+  if (!stars) {
+    stars = document.createElement("div");
+    stars.className = "stars";
+    stars.setAttribute("aria-hidden", "true");
+    mainMenu.insertBefore(stars, mainMenu.firstChild);
+  }
+}
+
+function triggerHomeIntroAnimation() {
+  if (!mainMenu) return;
+  mainMenu.classList.remove("home-loaded");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      mainMenu.classList.add("home-loaded");
+    });
+  });
+}
+
+function getHomeReviewPreset(totalPending) {
+  const total = Math.max(0, Number(totalPending) || 0);
+  if (total < 10) return { counts: [] };
+  if (total < 20) return { counts: [10] };
+  if (total < 50) return { counts: [10, 20] };
+  if (total < 100) return { counts: [10, 20, 50] };
+  return { counts: [10, 20, 50, 100] };
+}
+
+function openHomeStartPanel() {
+  if (homeConfigOpenTimer) {
+    clearTimeout(homeConfigOpenTimer);
+    homeConfigOpenTimer = null;
+  }
+  closeHomeConfigPanel();
+  closeHomeQuickPanel();
+  closeHomeReviewPanel();
+  const row = document.getElementById("main-primary-row");
+  const panel = document.getElementById("home-start-panel");
+  if (!row || !panel) return;
+  row.classList.add("is-start-open");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeHomeStartPanel() {
+  closeHomeQuickPanel();
+  closeHomeReviewPanel();
+  const row = document.getElementById("main-primary-row");
+  const panel = document.getElementById("home-start-panel");
+  if (!row || !panel) return;
+  row.classList.remove("is-start-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeQuickPanel() {
+  closeHomeReviewPanel();
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-quick-row");
+  const panel = document.getElementById("home-quick-panel");
+  if (!row || !panel) return;
+  if (mainRow) mainRow.classList.add("is-quick-open");
+  row.classList.add("is-quick-open");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeHomeQuickPanel() {
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-quick-row");
+  const panel = document.getElementById("home-quick-panel");
+  if (mainRow) mainRow.classList.remove("is-quick-open");
+  if (!row || !panel) return;
+  row.classList.remove("is-quick-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeReviewPanel() {
+  closeHomeQuickPanel();
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-review-row");
+  const panel = document.getElementById("home-review-panel");
+  if (!row || !panel) return;
+  if (mainRow) mainRow.classList.add("is-review-open");
+  row.classList.add("is-review-open");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeHomeReviewPanel() {
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-review-row");
+  const panel = document.getElementById("home-review-panel");
+  if (mainRow) mainRow.classList.remove("is-review-open");
+  if (!row || !panel) return;
+  row.classList.remove("is-review-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeConfigPanel(instant = false) {
+  if (homeConfigOpenTimer) {
+    clearTimeout(homeConfigOpenTimer);
+    homeConfigOpenTimer = null;
+  }
+  closeHomeStartPanel();
+  closeHomeVoicePanel();
+  const row = document.getElementById("main-config-row");
+  const panel = document.getElementById("home-config-panel");
+  if (!row || !panel) return;
+  if (instant) row.classList.add("is-config-instant");
+  row.classList.add("is-config-open");
+  panel.setAttribute("aria-hidden", "false");
+  if (instant) {
+    setTimeout(() => {
+      row.classList.remove("is-config-instant");
+    }, 60);
+  }
+}
+
+function closeHomeConfigPanel() {
+  if (homeConfigOpenTimer) {
+    clearTimeout(homeConfigOpenTimer);
+    homeConfigOpenTimer = null;
+  }
+  closeHomeVoicePanel();
+  const row = document.getElementById("main-config-row");
+  const panel = document.getElementById("home-config-panel");
+  if (!row || !panel) return;
+  row.classList.remove("is-config-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeVoicePanel() {
+  const configRow = document.getElementById("main-config-row");
+  const row = document.getElementById("home-voice-row");
+  const panel = document.getElementById("home-voice-panel");
+  if (!row || !panel) return;
+  if (configRow) configRow.classList.add("is-voice-open");
+  row.classList.add("is-voice-open");
+  panel.setAttribute("aria-hidden", "false");
+  ttsPopulateVoiceButtons();
+  ttsApplyUIState();
+}
+
+function closeHomeVoicePanel() {
+  const configRow = document.getElementById("main-config-row");
+  const row = document.getElementById("home-voice-row");
+  const panel = document.getElementById("home-voice-panel");
+  if (!row || !panel) return;
+  if (configRow) configRow.classList.remove("is-voice-open");
+  row.classList.remove("is-voice-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
 // =======================
 // MENÚ PRINCIPAL
 // =======================
 function showMainMenu() {
   stopTimer();
   hideAll();
+  document.body.classList.add("is-home-screen");
   mainMenu.style.display = "block";
+  ensureHomeStarsLayer();
   renderMotivationalPhrase();
+  renderAppVersionBadge();
 
   // Aseguramos zona de botones extra sin reescribir tu HTML
   let extraBox = document.getElementById("main-extra");
@@ -1250,60 +1786,250 @@ function showMainMenu() {
   const paused = lsGetJSON(LS_ACTIVE_PAUSED_TEST, null);
   const histRaw = lsGetJSON(LS_HISTORY, []);
   const hist = asArray(histRaw).filter(h => h && h.finished !== false);
-  const last = [...hist].reverse().find(h => ((h?.correct || 0) + (h?.wrong || 0) + (h?.noSe || 0)) > 0) || null;
+  const homeLastInfo = buildHomeLastTestInfo(hist);
 
   const reviewBtn = document.getElementById("btn-review");
-  if (reviewBtn) reviewBtn.textContent = `Repasar pendientes (${pendingCount})`;
+  if (reviewBtn) reviewBtn.textContent = `Fallos (${pendingCount})`;
 
   const rowPaused = document.getElementById("modal-row-paused");
   if (rowPaused) {
     rowPaused.innerHTML = paused
       ? `
-        <button id="btn-continue-paused" class="secondary">Continuar test pausado</button>
+        <button id="btn-continue-paused" class="secondary">Continuar</button>
         <button id="btn-cancel-paused" class="secondary">Cancelar test pausado</button>
       `
       : "";
   }
 
+  const reviewPreset = getHomeReviewPreset(pendingCount);
+  const reviewQuickButtonsHtml = reviewPreset.counts
+    .map(n => `<button type="button" class="secondary home-review-option" data-limit="${n}">${n}</button>`)
+    .join("");
+
   extraBox.innerHTML = `
     <div id="main-buttons">
-      <div class="row" id="main-primary-row">
-        <button id="btn-open-test-modal" class="success">Iniciar test</button>
+      <div class="row ${paused ? "is-paused" : ""}" id="main-primary-row">
+        <button id="btn-open-test-modal" class="success btn-primary">Iniciar test</button>
+        <div id="home-start-panel" class="home-start-panel" aria-hidden="true">
+          <div class="home-start-panel-title">Iniciar test</div>
+          ${paused ? `
+            <div class="row home-start-row single">
+              <button id="home-btn-continue-paused" class="secondary home-start-option">Continuar</button>
+            </div>
+          ` : ""}
+          <div class="row home-start-row single" id="home-quick-row">
+            <button id="home-btn-quick" class="secondary home-start-option">Rápido</button>
+            <div id="home-quick-panel" class="home-quick-panel" aria-hidden="true">
+              <div class="row home-quick-buttons">
+                <button id="home-btn-quick-10" class="secondary home-quick-option">10</button>
+                <button id="home-btn-quick-20" class="secondary home-quick-option">20</button>
+              </div>
+            </div>
+          </div>
+          <div class="row home-start-row single">
+            <button id="home-btn-custom" class="secondary home-start-option">Personalizado</button>
+          </div>
+          <div class="row home-start-row single" id="home-review-row">
+            <button id="home-btn-review" class="secondary home-start-option">Fallos (${pendingCount})</button>
+            <div id="home-review-panel" class="home-review-panel" aria-hidden="true">
+              <div class="home-review-panel-title">Fallos (${pendingCount})</div>
+              <div class="row home-review-buttons">
+                ${reviewQuickButtonsHtml}
+                <button type="button" class="secondary home-review-option" data-limit="all" ${pendingCount === 0 ? "disabled" : ""}>Todas</button>
+              </div>
+            </div>
+          </div>
+          <div class="row home-start-row single">
+            <button id="home-btn-exam" class="secondary home-start-option">Modo examen</button>
+          </div>
+          ${paused ? `
+            <div class="row home-start-row single">
+              <button id="home-btn-cancel-paused" class="secondary home-start-option">Cancelar test pausado</button>
+            </div>
+          ` : ""}
+          <div class="row home-start-row single">
+            <button id="home-btn-close-start" class="secondary home-start-option">Cerrar</button>
+          </div>
+        </div>
       </div>
       <div class="row" id="main-config-row">
         <button id="btn-open-config" class="secondary">Configuración</button>
+        <div id="home-config-panel" class="home-config-panel" aria-hidden="true">
+          <div class="home-config-panel-title">Configuración</div>
+          <div class="row home-config-row single home-config-option" id="home-voice-row">
+            <button id="home-btn-voice" class="secondary">Voz</button>
+            <div id="home-voice-panel" class="home-voice-panel" aria-hidden="true">
+              <div class="home-voice-panel-title">Voz</div>
+              <div id="home-tts-voice-list" class="row home-tts-voice-list"></div>
+              <div class="row home-voice-sliders">
+                <label class="small">Velocidad
+                  <input id="home-tts-rate" type="range" min="0.7" max="1.3" step="0.1" />
+                </label>
+                <label class="small">Tono
+                  <input id="home-tts-pitch" type="range" min="0.8" max="1.2" step="0.1" />
+                </label>
+              </div>
+              <div class="row home-voice-actions single">
+                <button id="home-btn-close-voice" class="secondary">Cerrar</button>
+              </div>
+            </div>
+          </div>
+          <div class="row home-config-row single">
+            <button id="home-btn-bank" class="secondary home-config-option">Banco de preguntas</button>
+          </div>
+          <div class="row home-config-row single">
+            <button id="home-btn-stats" class="secondary home-config-option">Estadísticas</button>
+          </div>
+          <div class="row home-config-row single">
+            <button id="home-btn-close-config" class="secondary home-config-option">Cerrar</button>
+          </div>
+        </div>
       </div>
-      <div class="row" id="main-darkmode-row"></div>
+      <div class="row" id="main-meta-row">
+        <div id="main-darkmode-row"></div>
+        <div class="small" id="main-last-test" style="text-align:center;margin-top:8px;">
+          <div class="${homeLastInfo.isStreak ? "home-streak" : ""}">${escapeHtml(homeLastInfo.displayText)}</div>
+        </div>
+      </div>
     </div>
-    <div class="small" id="main-db-pill" style="margin-top:8px;"></div>
-    ${
-      last
-        ? `<div class="small" style="margin-top:6px;">
-            <strong>Último test:</strong> ${escapeHtml(last.mode)} · ${last.correct}/${last.total} · ${new Date(last.date).toLocaleString("es-ES")}
-           </div>`
-        : ""
-    }
   `;
+
+  mainMenu.onclick = (e) => {
+    if (!document.body.classList.contains("is-home-screen")) return;
+    const buttonsRoot = document.getElementById("main-buttons");
+    if (!buttonsRoot) return;
+    if (buttonsRoot.contains(e.target)) return;
+    closeHomeStartPanel();
+    closeHomeConfigPanel();
+  };
 
   const row1 = document.getElementById("main-row-1");
   if (row1) {
     // Botones extra retirados del menú principal
   }
 
-  const dbPillTarget = document.getElementById("main-db-pill");
-  if (dbPillTarget && dbCountPill) {
-    dbPillTarget.innerHTML = "";
-    dbPillTarget.appendChild(dbCountPill);
-  }
-
   const openTestModalBtnNow = document.getElementById("btn-open-test-modal");
   if (openTestModalBtnNow) openTestModalBtnNow.onclick = openTestStartModal;
+  const homeStartPanelTitle = document.querySelector("#main-primary-row .home-start-panel-title");
+  if (homeStartPanelTitle) homeStartPanelTitle.onclick = () => closeHomeStartPanel();
+  const homeBtnQuick = document.getElementById("home-btn-quick");
+  if (homeBtnQuick) homeBtnQuick.onclick = () => {
+    const quickRow = document.getElementById("home-quick-row");
+    if (quickRow && quickRow.classList.contains("is-quick-open")) closeHomeQuickPanel();
+    else openHomeQuickPanel();
+  };
+  const homeBtnQuick10 = document.getElementById("home-btn-quick-10");
+  if (homeBtnQuick10) homeBtnQuick10.onclick = () => {
+    closeHomeStartPanel();
+    startQuickTest(10, 10);
+  };
+  const homeBtnQuick20 = document.getElementById("home-btn-quick-20");
+  if (homeBtnQuick20) homeBtnQuick20.onclick = () => {
+    closeHomeStartPanel();
+    startQuickTest(20, 20);
+  };
+  const homeBtnCustom = document.getElementById("home-btn-custom");
+  if (homeBtnCustom) homeBtnCustom.onclick = () => {
+    closeHomeStartPanel();
+    showTemaSelectionScreen();
+  };
+  const homeBtnReview = document.getElementById("home-btn-review");
+  if (homeBtnReview) homeBtnReview.onclick = () => {
+    if (pendingCount === 0) {
+      startReviewPending();
+      return;
+    }
+    const row = document.getElementById("home-review-row");
+    if (row && row.classList.contains("is-review-open")) closeHomeReviewPanel();
+    else openHomeReviewPanel();
+  };
+  const homeReviewQuickButtons = document.querySelectorAll(".home-review-option");
+  homeReviewQuickButtons.forEach(btn => {
+    btn.onclick = () => {
+      const limitRaw = btn.getAttribute("data-limit");
+      const limit = limitRaw === "all" ? null : Number(limitRaw);
+      closeHomeStartPanel();
+      startReviewPending(Number.isFinite(limit) && limit > 0 ? limit : null);
+    };
+  });
+  const homeBtnExam = document.getElementById("home-btn-exam");
+  if (homeBtnExam) homeBtnExam.onclick = () => {
+    closeHomeStartPanel();
+    openExamSourceModal();
+  };
+  const homeBtnCloseStart = document.getElementById("home-btn-close-start");
+  if (homeBtnCloseStart) homeBtnCloseStart.onclick = () => closeHomeStartPanel();
+  const homeStartOptions = document.querySelectorAll(".home-start-option");
+  homeStartOptions.forEach((btn, idx) => {
+    btn.style.setProperty("--home-delay", `${idx * 70}ms`);
+  });
+
   const openConfigBtnNow = document.getElementById("btn-open-config");
-  if (openConfigBtnNow) openConfigBtnNow.onclick = () => showConfigScreen();
+  if (openConfigBtnNow) {
+    openConfigBtnNow.onclick = () => {
+      const configRow = document.getElementById("main-config-row");
+      if (configRow && configRow.classList.contains("is-config-open")) {
+        closeHomeConfigPanel();
+        return;
+      }
+      if (homeConfigOpenTimer) clearTimeout(homeConfigOpenTimer);
+      homeConfigOpenTimer = setTimeout(() => {
+        openHomeConfigPanel();
+      }, 160);
+    };
+  }
+  const homeBtnBank = document.getElementById("home-btn-bank");
+  if (homeBtnBank) homeBtnBank.onclick = () => {
+    closeHomeConfigPanel();
+    showQuestionBank();
+  };
+  const homeBtnStats = document.getElementById("home-btn-stats");
+  if (homeBtnStats) homeBtnStats.onclick = () => {
+    closeHomeConfigPanel();
+    showStatsScreen();
+  };
+  const homeBtnVoice = document.getElementById("home-btn-voice");
+  if (homeBtnVoice) homeBtnVoice.onclick = () => openHomeVoicePanel();
+  const homeBtnCloseVoice = document.getElementById("home-btn-close-voice");
+  if (homeBtnCloseVoice) homeBtnCloseVoice.onclick = () => closeHomeVoicePanel();
+  const homeTtsRate = document.getElementById("home-tts-rate");
+  if (homeTtsRate) {
+    homeTtsRate.oninput = () => {
+      ttsUserInteracted = true;
+      ttsSettings.rate = Number(homeTtsRate.value) || 1;
+      ttsSaveSettings();
+      ttsApplyUIState();
+    };
+  }
+  const homeTtsPitch = document.getElementById("home-tts-pitch");
+  if (homeTtsPitch) {
+    homeTtsPitch.oninput = () => {
+      ttsUserInteracted = true;
+      ttsSettings.pitch = Number(homeTtsPitch.value) || 1;
+      ttsSaveSettings();
+      ttsApplyUIState();
+    };
+  }
+  const homeBtnCloseConfig = document.getElementById("home-btn-close-config");
+  if (homeBtnCloseConfig) homeBtnCloseConfig.onclick = () => closeHomeConfigPanel();
+  ttsPopulateVoiceButtons();
+  ttsApplyUIState();
 
   if (paused) {
-    document.getElementById("btn-continue-paused").onclick = () => resumePausedTest();
-    document.getElementById("btn-cancel-paused").onclick = () => {
+    const modalContinuePaused = document.getElementById("btn-continue-paused");
+    if (modalContinuePaused) modalContinuePaused.onclick = () => resumePausedTest();
+    const modalCancelPaused = document.getElementById("btn-cancel-paused");
+    if (modalCancelPaused) modalCancelPaused.onclick = () => {
+      clearPausedTest();
+      showMainMenu();
+    };
+    const homeContinuePaused = document.getElementById("home-btn-continue-paused");
+    if (homeContinuePaused) homeContinuePaused.onclick = () => {
+      closeHomeStartPanel();
+      resumePausedTest();
+    };
+    const homeCancelPaused = document.getElementById("home-btn-cancel-paused");
+    if (homeCancelPaused) homeCancelPaused.onclick = () => {
       clearPausedTest();
       showMainMenu();
     };
@@ -1320,6 +2046,7 @@ function showMainMenu() {
 
   // ✅ Hook: añade el toggle de modo oscuro en el menú principal
   injectDarkModeToggleIntoMainMenu();
+  triggerHomeIntroAnimation();
 }
 
 function showConfigScreen() {
@@ -1343,13 +2070,36 @@ function showConfigScreen() {
 }
 
 function openTestStartModal() {
+  if (document.body.classList.contains("is-home-screen")) {
+    const startRow = document.getElementById("main-primary-row");
+    if (startRow && startRow.classList.contains("is-start-open")) {
+      closeHomeStartPanel();
+      return;
+    }
+    if (openTestModalTimer) clearTimeout(openTestModalTimer);
+    openTestModalTimer = setTimeout(() => {
+      openHomeStartPanel();
+      openTestModalTimer = null;
+    }, 180);
+    return;
+  }
   if (!testStartModal) return;
-  testStartModal.style.display = "flex";
-  testStartModal.setAttribute("aria-hidden", "false");
+  if (openTestModalTimer) clearTimeout(openTestModalTimer);
+  openTestModalTimer = setTimeout(() => {
+    testStartModal.style.display = "flex";
+    testStartModal.setAttribute("aria-hidden", "false");
+    openTestModalTimer = null;
+  }, 220);
 }
 
 function closeTestStartModal() {
+  closeHomeStartPanel();
+  closeHomeConfigPanel();
   if (!testStartModal) return;
+  if (openTestModalTimer) {
+    clearTimeout(openTestModalTimer);
+    openTestModalTimer = null;
+  }
   testStartModal.style.display = "none";
   testStartModal.setAttribute("aria-hidden", "true");
 }
@@ -1359,6 +2109,8 @@ function closeTestStartModal() {
 // =======================
 function showTestMenuScreen() {
   hideAll();
+  testMenu.classList.remove("customize-test-theme");
+  testMenu.classList.remove("bank-theme");
   testMenu.style.display = "block";
 }
 
@@ -1579,7 +2331,10 @@ function showStatsScreen() {
     <button id="btn-reset-stats" class="secondary">Resetear estadísticas</button>
   `;
 
-  document.getElementById("btn-stats-back").onclick = showConfigScreen;
+  document.getElementById("btn-stats-back").onclick = () => {
+    showMainMenu();
+    openHomeConfigPanel(true);
+  };
   document.getElementById("btn-reset-stats").onclick = async () => {
     const ok = await showConfirm(
       "¿Seguro que quieres resetear estadísticas, historial y pendientes? (No borra preguntas)",
@@ -1598,12 +2353,15 @@ function showImportScreen() {
 }
 
 // =======================
-// TEST HEADER UI: PAUSA + TERMINAR
+// TEST HEADER UI: PAUSA
 // =======================
 function ensurePauseAndFinishUI() {
   // buscamos la primera row del test container (timer + mode pill)
   const controlsRow = document.getElementById("test-controls-row");
   if (!controlsRow) return;
+
+  const oldFinishBtn = document.getElementById("finish-btn");
+  if (oldFinishBtn) oldFinishBtn.remove();
 
   // pausa
   if (!document.getElementById("pause-btn")) {
@@ -1611,25 +2369,8 @@ function ensurePauseAndFinishUI() {
     pauseBtn.id = "pause-btn";
     pauseBtn.className = "secondary";
     pauseBtn.textContent = "Pausar";
-    pauseBtn.style.width = "80px";
-    pauseBtn.style.margin = "0";
-    pauseBtn.onclick = () => pauseTestToMenu();
+    pauseBtn.onclick = () => showPauseExitOptions();
     controlsRow.appendChild(pauseBtn);
-  }
-
-  // terminar
-  if (!document.getElementById("finish-btn")) {
-    const finishBtn = document.createElement("button");
-    finishBtn.id = "finish-btn";
-    finishBtn.className = "danger";
-    finishBtn.textContent = "Terminar";
-    finishBtn.style.width = "80px";
-    finishBtn.style.margin = "0";
-    finishBtn.onclick = async () => {
-      const ok = await showConfirm("¿Terminar el test ahora?");
-      if (ok) finishTest("manual");
-    };
-    controlsRow.appendChild(finishBtn);
   }
 }
 
@@ -1691,6 +2432,54 @@ function pauseTestToMenu() {
 
   lsSetJSON(LS_ACTIVE_PAUSED_TEST, payload);
   showMainMenu();
+}
+
+function discardCurrentTestAndExit() {
+  stopTimer();
+  ttsStop();
+  localStorage.removeItem(LS_ACTIVE_PAUSED_TEST);
+  showMainMenu();
+}
+
+async function showPauseExitOptions() {
+  const shouldResumeTimer = !!timer;
+  stopTimer();
+  ttsPrepareResumeFromPause();
+  ttsStop();
+  document.body.classList.add("is-pause-modal-open");
+
+  let action = null;
+  try {
+    action = await openModal({
+      hideTitle: true,
+      hideMessage: true,
+      actionsClassName: "modal-actions-vertical",
+      actions: [
+        { label: "Continuar", value: "continue", className: "secondary pause-exit-btn", role: "cancel", default: true },
+        { label: "Guardar y salir", value: "save", className: "secondary pause-exit-btn" },
+        { label: "Descartar y salir", value: "discard", className: "danger pause-exit-btn" }
+      ]
+    });
+  } finally {
+    document.body.classList.remove("is-pause-modal-open");
+  }
+
+  if (action === "continue") {
+    if (shouldResumeTimer) startTimer();
+    ttsResumeAfterPauseIfNeeded();
+    return;
+  }
+  if (action === "discard") {
+    ttsPausedResume = null;
+    discardCurrentTestAndExit();
+    return;
+  }
+  if (action === "save") {
+    ttsPausedResume = null;
+    pauseTestToMenu();
+    return;
+  }
+  if (shouldResumeTimer) startTimer();
 }
 
 async function resumePausedTest() {
@@ -1756,6 +2545,7 @@ async function resumePausedTest() {
     : [];
   lastSelectedText = saved.view?.selectedText ?? null;
   lastCorrectText = saved.view?.correctText ?? null;
+  ttsLastQuestionId = null;
 
   showTestScreen();
 
@@ -1816,6 +2606,7 @@ function showTemaSelectionScreen() {
   mode = "practice";
 
   showTestMenuScreen();
+  testMenu.classList.add("customize-test-theme");
 
   const stats = getStats();
   const temaCounts = new Map();
@@ -1834,15 +2625,11 @@ function showTemaSelectionScreen() {
   const totalQuestions = questions.length;
 
   testMenu.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-      <h2 style="margin:0;">Personaliza el test</h2>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-        <button id="btn-start-practice-top" class="success">Comenzar test</button>
-      </div>
+    <div style="display:flex;justify-content:center;align-items:center;margin-bottom:10px;">
+      <button id="btn-start-practice-top" class="success">Comenzar test</button>
     </div>
-    <div class="small" style="margin-bottom:10px;"></div>
 
-    <div class="card" style="margin:12px 0;text-align:center;padding:10px;">
+    <div id="custom-filter-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
       <div style="font-weight:700;margin-bottom:6px;">Filtrar</div>
       <div id="fuente-select-wrap" class="small"></div>
     </div>
@@ -1857,7 +2644,7 @@ function showTemaSelectionScreen() {
 
     <div id="tema-select-wrap"></div>
 
-    <div style="margin:12px 0;text-align:center;">
+    <div id="custom-time-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
       <div style="font-weight:700;margin:8px 0 6px 0;">Nº de preguntas</div>
       <div class="row" id="num-questions-buttons" style="justify-content:center;margin-bottom:6px;">
         <button class="secondary numq-btn" data-value="10">10</button>
@@ -1871,7 +2658,6 @@ function showTemaSelectionScreen() {
         <button class="secondary time-btn" data-value="perq30">30s</button>
         <button class="secondary time-btn" data-value="perq45">45s</button>
         <button class="success time-btn" data-value="perq">1 min</button>
-        <button class="secondary time-btn" data-value="perq75">1:15</button>
         <button class="secondary time-btn" data-value="perq90">1:30</button>
         <button class="secondary time-btn" data-value="perq120">2 min</button>
       </div>
@@ -2530,7 +3316,7 @@ function showExamByBlockSelect() {
 // =======================
 // REPASO PENDIENTES (solo pendientes reales)
 // =======================
-function startReviewPending() {
+function startReviewPending(limitCount = null) {
   prunePendingGhostIds();
 
   const existing = getExistingIdSet();   // strings
@@ -2542,7 +3328,7 @@ function startReviewPending() {
   );
 
   const idSet = new Set(ids.map(String));
-  const pool = (questions || []).filter(q => idSet.has(String(q.id)));
+  let pool = (questions || []).filter(q => idSet.has(String(q.id)));
 
   if (pool.length === 0) {
     showAlert("No tienes preguntas pendientes de repaso");
@@ -2551,6 +3337,10 @@ function startReviewPending() {
 
   mode = "review";
   shuffleArray(pool);
+  const limit = Number(limitCount);
+  if (Number.isFinite(limit) && limit > 0) {
+    pool = pool.slice(0, Math.min(limit, pool.length));
+  }
 
   startSession(pool, {
     mode: "review",
@@ -2655,6 +3445,7 @@ function startSession(pool, opts) {
   currentShuffledOptions = [];
   lastSelectedText = null;
   lastCorrectText = null;
+  ttsLastQuestionId = null;
 
   showTestScreen();
   showQuestion();
@@ -2674,8 +3465,13 @@ function renderQuestionWithOptions(q, opcionesOrdenadas) {
 
   noSeBtn.style.display = "inline-block";
   noSeBtn.disabled = false;
+  noSeBtn.textContent = "No lo sé";
+  noSeBtn.onclick = onNoSe;
 
-  continueBtn.style.display = "none";
+  if (continueBtn) {
+    continueBtn.style.display = "none";
+    continueBtn.onclick = null;
+  }
 
   currentShuffledOptions = opcionesOrdenadas.slice();
 
@@ -2823,16 +3619,18 @@ function showAnswer(q, selectedTextOrNull) {
   lastSelectedText = selectedTextOrNull;
   lastCorrectText = q.opciones[q.respuesta_correcta];
 
-  noSeBtn.style.display = "none";
-  noSeBtn.disabled = true;
+  noSeBtn.style.display = "inline-block";
+  noSeBtn.disabled = false;
+  noSeBtn.textContent = "Continuar";
 
   const correctText = q.opciones[q.respuesta_correcta];
   const buttons = answersContainer.querySelectorAll(".answer-btn");
 
   buttons.forEach(btn => {
     const t = (btn.dataset.optionText || "").toString();
-    if (t === correctText) btn.style.backgroundColor = "lightgreen";
-    else if (selectedTextOrNull !== null && t === selectedTextOrNull) btn.style.backgroundColor = "salmon";
+    btn.classList.remove("is-correct", "is-wrong");
+    if (t === correctText) btn.classList.add("is-correct");
+    else if (selectedTextOrNull !== null && t === selectedTextOrNull) btn.classList.add("is-wrong");
     btn.disabled = false;
     btn.style.cursor = "pointer";
   });
@@ -2846,14 +3644,13 @@ function showAnswer(q, selectedTextOrNull) {
     answerExplanation.style.display = "flex";
   }
 
-  continueBtn.style.display = "inline-block";
-  continueBtn.onclick = () => {
+  const continueFromFeedback = () => {
     ttsUserInteracted = true;
     if (answerExplanation && answerExplanation.contains(exp)) {
       answerExplanation.removeChild(exp);
       answerExplanation.style.display = "none";
     }
-    buttons.forEach(btn => (btn.style.backgroundColor = ""));
+    buttons.forEach(btn => btn.classList.remove("is-correct", "is-wrong"));
     buttons.forEach(btn => {
       btn.onclick = null;
       btn.style.cursor = "";
@@ -2864,9 +3661,14 @@ function showAnswer(q, selectedTextOrNull) {
     showQuestion();
     startTimer();
   };
+  if (continueBtn) {
+    continueBtn.style.display = "none";
+    continueBtn.onclick = continueFromFeedback;
+  }
+  noSeBtn.onclick = continueFromFeedback;
 
   buttons.forEach(btn => {
-    btn.onclick = () => continueBtn.click();
+    btn.onclick = continueFromFeedback;
   });
 }
 
@@ -3283,13 +4085,13 @@ function importQuestionsFromTextarea() {
   const { parsed, errors } = parseImportBlocks(raw);
   if (errors.length) {
     importStatus.innerHTML =
-      `<div class="small" style="color:#b00020;">No se pudo parsear:\n` +
+      `<div class="small status-error">No se pudo parsear:\n` +
       `${errors.map(e => `<div>${escapeHtml(e)}</div>`).join("")}</div>`;
     return;
   }
 
   if (!parsed.length) {
-    importStatus.innerHTML = `<div class="small" style="color:#b00020;">No se encontró ninguna pregunta.</div>`;
+    importStatus.innerHTML = `<div class="small status-error">No se encontró ninguna pregunta.</div>`;
     return;
   }
 
@@ -3326,7 +4128,7 @@ function importQuestionsFromTextarea() {
   applyDeletedFilter();
   refreshDbCountPill();
 
-  importStatus.innerHTML = `<div class="small" style="color:#006b2d;">✅ Importadas ${added} preguntas.</div>`;
+  importStatus.innerHTML = `<div class="small status-ok">✅ Importadas ${added} preguntas.</div>`;
 
   // ✅ limpiar textarea tras importar
   importTextarea.value = "";
@@ -3348,7 +4150,7 @@ async function clearAddedQuestions() {
   applyDeletedFilter();
   refreshDbCountPill();
 
-  importStatus.innerHTML = `<div class="small" style="color:#006b2d;">✅ Preguntas añadidas vaciadas.</div>`;
+  importStatus.innerHTML = `<div class="small status-ok">✅ Preguntas añadidas vaciadas.</div>`;
 }
 
 // =======================
@@ -3357,6 +4159,7 @@ async function clearAddedQuestions() {
 function showQuestionBank() {
   mode = "bank";
   showTestMenuScreen();
+  testMenu.classList.add("bank-theme");
 
   const bloques = [...new Set(questions.map(q => q.bloque || "Sin bloque"))]
     .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
@@ -3365,7 +4168,9 @@ function showQuestionBank() {
     .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
 
   testMenu.innerHTML = `
-    <h2>Banco de preguntas</h2>
+    <div class="row" style="justify-content:center;margin-bottom:10px;">
+      <div id="bank-db-pill-target"></div>
+    </div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;">
       <input id="bank-search" type="text" placeholder="Buscar texto..." style="flex:1;max-width:520px;padding:8px;border-radius:10px;border:1px solid #b8d8ff;">
@@ -3399,13 +4204,23 @@ function showQuestionBank() {
     <div id="bank-results" style="margin-top:12px;"></div>
   `;
 
-  document.getElementById("bank-back").onclick = showConfigScreen;
+  document.getElementById("bank-back").onclick = () => {
+    showMainMenu();
+    openHomeConfigPanel(true);
+  };
   document.getElementById("bank-export-json").onclick = exportQuestionsJSON;
   document.getElementById("bank-import-questions").onclick = () => {
     clearImportTextarea();
     showImportScreen();
   };
   document.getElementById("bank-trash").onclick = () => showTrashScreen();
+
+  const bankDbPillTarget = document.getElementById("bank-db-pill-target");
+  if (bankDbPillTarget && dbCountPill) {
+    bankDbPillTarget.innerHTML = "";
+    bankDbPillTarget.appendChild(dbCountPill);
+  }
+  refreshDbCountPill();
 
   const runSearch = () => {
     const term = (document.getElementById("bank-search").value || "").trim().toLowerCase();
@@ -3939,7 +4754,7 @@ function ensureDarkModeStyleTag() {
        DARK MODE THEME
        ======================= */
 
-    body.chatgpt-dark {
+    body.chatgpt-dark:not(.is-home-screen) {
       background: #0b0f14 !important;
       color: #e6eaf0 !important;
     }
@@ -4020,10 +4835,10 @@ function ensureDarkModeStyleTag() {
       border-color: rgba(255,90,90,0.35);
     }
 
-    body.chatgpt-dark .answer-btn[style*="lightgreen"] {
+    body.chatgpt-dark .answer-btn.is-correct {
       background: rgba(70, 160, 110, 0.28) !important;
     }
-    body.chatgpt-dark .answer-btn[style*="salmon"] {
+    body.chatgpt-dark .answer-btn.is-wrong {
       background: rgba(190, 90, 90, 0.28) !important;
     }
 
@@ -4032,15 +4847,30 @@ function ensureDarkModeStyleTag() {
       border: 1px solid rgba(255,255,255,0.14) !important;
     }
 
-    body.chatgpt-dark .modal,
-    body.chatgpt-dark .modal * {
-      color: #000 !important;
+    body.chatgpt-dark .modal-overlay {
+      background: rgba(4, 8, 18, 0.68) !important;
+    }
+
+    body.chatgpt-dark .modal {
+      background: #161f31 !important;
+      border: 1px solid rgba(125, 152, 210, 0.36) !important;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45) !important;
+      color: #e6eaf0 !important;
+    }
+
+    body.chatgpt-dark .modal-title,
+    body.chatgpt-dark .modal-message,
+    body.chatgpt-dark .modal p,
+    body.chatgpt-dark .modal span,
+    body.chatgpt-dark .modal div,
+    body.chatgpt-dark .modal label {
+      color: #e6eaf0 !important;
     }
 
     body.chatgpt-dark .modal button {
-      background: rgba(120,170,255,0.22) !important;
-      border-color: rgba(120,170,255,0.35) !important;
-      color: #000 !important;
+      background: rgba(96, 140, 224, 0.24) !important;
+      border-color: rgba(132, 168, 235, 0.42) !important;
+      color: #e6eaf0 !important;
     }
 
     /* Pills / badges (por si usan fondo claro) */
@@ -4060,6 +4890,7 @@ function applyDarkModeToDocument() {
 
   const enabled = isDarkModeEnabled();
   document.body.classList.toggle("chatgpt-dark", enabled);
+  document.body.classList.toggle("chari-dark", enabled);
 
   // Si quieres, aquí podríamos también ajustar algún inline style concreto si lo hubiera
   // pero por ahora lo resolvemos vía CSS global.
@@ -4070,16 +4901,36 @@ function injectDarkModeToggleIntoMainMenu() {
   if (!row) return;
   row.innerHTML = "";
 
-  const btn = document.createElement("button");
-  btn.id = "btn-darkmode-toggle";
-  btn.className = "secondary";
-  btn.textContent = isDarkModeEnabled() ? "Modo claro" : "Modo oscuro";
+  const wrap = document.createElement("div");
+  wrap.className = "home-dark-toggle";
+  wrap.innerHTML = `
+    <div class="home-dark-left">
+      <span class="home-dark-icon" aria-hidden="true">◐</span>
+      <span class="home-dark-label">Modo oscuro</span>
+    </div>
+    <button id="btn-darkmode-toggle" type="button" class="home-switch" role="switch" aria-checked="false">
+      <span class="home-switch-thumb" aria-hidden="true"></span>
+    </button>
+  `;
+  row.appendChild(wrap);
+
+  const btn = wrap.querySelector("#btn-darkmode-toggle");
+  if (!btn) return;
+
+  const sync = () => {
+    const enabled = isDarkModeEnabled();
+    btn.classList.toggle("is-on", enabled);
+    btn.setAttribute("aria-checked", String(enabled));
+    btn.setAttribute("aria-label", enabled ? "Desactivar modo oscuro" : "Activar modo oscuro");
+  };
+
   btn.onclick = () => {
     const newVal = !isDarkModeEnabled();
     setDarkModeEnabled(newVal);
-    btn.textContent = newVal ? "Modo claro" : "Modo oscuro";
+    sync();
   };
-  row.appendChild(btn);
+
+  sync();
 }
 
 // Aplicar el modo al cargar la app (por si el usuario ya lo tenía activado)
@@ -4205,9 +5056,7 @@ function cssEscape(val) {
     if (viewState === "feedback") {
       if (key === "enter" || key === " ") {
         e.preventDefault();
-        if (continueBtn && continueBtn.style.display !== "none") {
-          continueBtn.click();
-        }
+        if (noSeBtn) noSeBtn.click();
       }
     }
   });
@@ -4243,6 +5092,15 @@ btnClearImport.onclick = clearImportTextarea;
 btnClearAdded.onclick = clearAddedQuestions;
 btnBackFromImport.onclick = showMainMenu;
 if (voiceSettingsBackBtn) voiceSettingsBackBtn.onclick = showConfigScreen;
+if (motivationalPhraseEl) {
+  motivationalPhraseEl.title = "Pulsa para cambiar la frase";
+  motivationalPhraseEl.addEventListener("click", e => {
+    e.preventDefault();
+    const selection = window.getSelection ? window.getSelection() : null;
+    if (selection && selection.removeAllRanges) selection.removeAllRanges();
+    renderMotivationalPhrase(true, true);
+  });
+}
 
 // =======================
 // INIT
@@ -4251,10 +5109,41 @@ function isVisibleEl(el) {
   return !!(el && el.offsetParent !== null);
 }
 
+function isTestScreenVisible() {
+  if (!testContainer) return false;
+  const style = window.getComputedStyle(testContainer);
+  return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+}
+
 function handleEscBack() {
-  const finishBtn = document.getElementById("finish-btn");
-  if (isVisibleEl(finishBtn)) {
-    finishBtn.click();
+  const isModalOpen = !!(
+    modalOverlay &&
+    modalOverlay.getAttribute("aria-hidden") === "false" &&
+    window.getComputedStyle(modalOverlay).display !== "none"
+  );
+  if (isModalOpen) return;
+
+  const pauseBtn = document.getElementById("pause-btn");
+  if (isTestScreenVisible() && isVisibleEl(pauseBtn)) {
+    pauseBtn.click();
+    return;
+  }
+
+  const homeVoiceRow = document.getElementById("home-voice-row");
+  if (homeVoiceRow && homeVoiceRow.classList.contains("is-voice-open")) {
+    closeHomeVoicePanel();
+    return;
+  }
+
+  const mainConfigRow = document.getElementById("main-config-row");
+  if (mainConfigRow && mainConfigRow.classList.contains("is-config-open")) {
+    closeHomeConfigPanel();
+    return;
+  }
+
+  const mainPrimaryRow = document.getElementById("main-primary-row");
+  if (mainPrimaryRow && mainPrimaryRow.classList.contains("is-start-open")) {
+    closeHomeStartPanel();
     return;
   }
 

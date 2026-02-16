@@ -24,6 +24,7 @@
     #main-menu .row { margin-top: 12px; }
     #main-extra { width: 100%; position: absolute; left: 0; right: 0; bottom: 16px; }
     #main-menu { position: relative; }
+    #app-version-badge { position: absolute; right: 10px; bottom: 8px; font-size: 11px; opacity: 0.7; }
     #main-top { width: 100%; display: flex; flex-direction: column; align-items: center; flex: 1; }
     #main-buttons { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
     #main-top button { width: 280px; }
@@ -46,12 +47,38 @@
     #test-progress .progress-bar { width: min(420px, 70vw); height: 10px; background: #e6eefc; border-radius: 999px; overflow: hidden; }
     #test-progress .progress-bar-fill { height: 100%; background: #6aa9ff; width: 0%; }
     #progress-text { min-width: 70px; text-align: right; font-weight: bold; }
-    #pause-btn, #finish-btn, #tts-read { width: 80px !important; padding: 4px 6px !important; font-size: 11px !important; margin: 0 !important; }
+    #test-controls-row { flex-wrap: nowrap; justify-content: center; align-items: center; gap: 8px; }
+    #test-controls-row #no-btn,
+    #test-controls-row #pause-btn {
+      flex: 1 1 0;
+      width: auto !important;
+      min-width: 0;
+      min-height: 44px;
+      margin: 0 !important;
+      padding: 8px 10px !important;
+      font-size: 16px !important;
+    }
+    #test-controls-row #no-btn,
+    #test-controls-row #pause-btn { background: white; }
+    #test-controls-row #tts-read {
+      flex: 0 0 44px;
+      width: 44px !important;
+      height: 44px !important;
+      min-width: 44px;
+      min-height: 44px;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #test-controls-row #tts-read > span:not(.tts-read-icon) { display: none; }
+    #test-controls-row #tts-read .tts-read-icon { font-size: 18px; }
     #results-container { text-align: center; }
     #results-container { position: relative; min-height: calc(100vh - 24px); min-height: calc(100dvh - 24px); height: calc(100vh - 24px); height: calc(100dvh - 24px); padding-bottom: 140px; }
     #results-actions-bottom { position: absolute; left: 0; right: 0; bottom: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .answer-btn { width: 280px; font-size: 16px; }
-    #no-btn { width: 120px; background: white; }
+    #no-btn { background: white; }
     .numq-btn, .time-btn { width: 70px; }
     .secondary.numq-btn, .secondary.time-btn, .secondary.fuente-btn { background: white; }
     #test-menu .fuente-btn { width: 160px; }
@@ -81,14 +108,26 @@
       button { font-size: 16px; }
       button { width: 100%; max-width: 100%; }
       .answer-btn { width: 100%; }
-      #no-btn { width: 100%; }
       #test-menu .fuente-btn { width: 100%; }
       .numq-btn, .time-btn { width: 64px; }
       .row { gap: 4px; }
       .card { padding: 6px; margin: 6px 0; }
       hr { margin: 6px 0; }
       #main-menu .row { margin-top: 6px; }
-      .card { height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); overflow: auto; }
+      #app-version-badge { right: 8px; bottom: 6px; font-size: 10px; }
+      #main-menu,
+      #test-menu,
+      #config-container,
+      #voice-settings-container,
+      #test-container,
+      #results-container,
+      #review-container,
+      #stats-container,
+      #import-container {
+        height: calc(100dvh - 24px);
+        max-height: calc(100dvh - 24px);
+        overflow: auto;
+      }
       .review-item { height: auto; max-height: none; overflow: visible; padding: 10px; margin: 10px 0; }
       #test-top-row { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "timer progress" "bar bar"; align-items: center; gap: 6px; }
       #timer { grid-area: timer; text-align: left; font-size: 14px; width: auto; }
@@ -100,16 +139,19 @@
       #test-bottom { position: absolute; left: 0; right: 0; bottom: 6px; padding-bottom: 6px; }
       #test-bottom { padding-left: 6px; padding-right: 6px; }
     #answer-explanation { max-height: 120px; overflow: auto; }
-      #test-controls-row { flex-wrap: nowrap; justify-content: center; gap: 8px; }
-      #pause-btn, #finish-btn, #tts-read { width: 30% !important; min-width: 0; }
+      #test-controls-row { gap: 6px; }
       #results-container { height: calc(100dvh - 24px); position: relative; padding-bottom: 0; }
       #results-actions-bottom { position: absolute; left: 0; right: 0; bottom: 8px; gap: 6px; padding-left: 6px; padding-right: 6px; }
       #results-text { padding-bottom: 90px; }
-      .stats-grid { display: flex; flex-direction: column; gap: 16px; }
-      .stats-card { width: 100%; padding-right: 14px; }
+      .stats-grid { display: flex; flex-direction: column; gap: 16px; width: 100%; padding: 0 6px; box-sizing: border-box; }
+      .stats-card { width: 100%; margin: 0 auto; padding-right: 14px; box-sizing: border-box; }
       .stats-circle { position: static; width: 100%; margin-top: 12px; }
+      #stats-content > .card:not(.stats-card) { margin-left: 6px; margin-right: 6px; width: auto; box-sizing: border-box; }
+      #stats-actions { width: 100%; padding: 0 6px; box-sizing: border-box; justify-content: center; }
+      #stats-actions button { width: 100%; max-width: 100%; }
     }
   </style>
+  <link rel="stylesheet" href="styles.css?v=20260215">
 </head>
 <body>
 
@@ -117,10 +159,11 @@
 <div id="main-menu" class="card">
   <div id="main-top">
     <div id="motivational-phrase" class="small" style="margin-bottom:16px;font-size:18px;"></div>
-    <h1>Facultativo de bibliotecas</h1>
+    <h1><span class="logo-test">TEST</span><span class="logo-aplus"><span class="logo-a">A</span><span class="logo-plus">+</span></span></h1>
   </div>
 
   <div id="main-extra"></div>
+  <div id="app-version-badge" class="small"></div>
 
   <div id="main-button-cache" style="display:none">
     <button id="btn-open-import" class="secondary">Importar preguntas</button>
@@ -211,13 +254,13 @@
     <div id="answers-container"></div>
 
     <div class="row">
-      <button id="no-btn" class="secondary">No lo sé</button>
       <button id="continue-btn" style="display:none">Continuar</button>
     </div>
 
     <hr>
     <div class="row" id="test-controls-row">
-      <button id="tts-read" class="secondary" aria-label="Leer pregunta y opciones">Leer</button>
+      <button id="no-btn" class="secondary">No lo sé</button>
+      <button id="tts-read" class="secondary" aria-label="Leer pregunta y opciones"><span class="tts-read-icon" aria-hidden="true">🔊</span></button>
     </div>
   </div>
 </div>
@@ -242,7 +285,6 @@
 
 <!-- ESTADÍSTICAS -->
 <div id="stats-container" class="card" style="display:none">
-  <h2>Estadísticas</h2>
   <div id="stats-content"></div>
   <div class="row" id="stats-actions"></div>
 </div>
@@ -276,6 +318,7 @@
   </div>
 </div>
 
+<script src="version.js"></script>
 <script src="app.js?v=20260214"></script>
 </body>
 </html>

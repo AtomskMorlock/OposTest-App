@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-label="Fondo abstracto inspirado en biblioteca">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f6fbff"/>
+      <stop offset="55%" stop-color="#e8f2ff"/>
+      <stop offset="100%" stop-color="#dbeaff"/>
+    </linearGradient>
+    <linearGradient id="shelf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#aac8f6"/>
+      <stop offset="100%" stop-color="#93b7f0"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientTransform="translate(280 160) rotate(35) scale(480 330)">
+      <stop offset="0%" stop-color="#c8ddff" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#c8ddff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientTransform="translate(1280 130) rotate(-15) scale(420 300)">
+      <stop offset="0%" stop-color="#d2e4ff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#d2e4ff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#c4d9fb" stroke-opacity="0.35" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <rect width="1600" height="1000" fill="url(#grid)" opacity="0.5"/>
+  <rect width="1600" height="1000" fill="url(#glow1)"/>
+  <rect width="1600" height="1000" fill="url(#glow2)"/>
+
+  <path d="M0 795 C310 700 570 875 860 800 C1140 728 1370 855 1600 780 L1600 1000 L0 1000 Z" fill="#c2dafc" opacity="0.55"/>
+  <path d="M0 840 C330 760 620 905 930 835 C1220 770 1420 890 1600 845 L1600 1000 L0 1000 Z" fill="#b4d0fa" opacity="0.55"/>
+
+  <g transform="translate(70 640)" opacity="0.85">
+    <rect x="0" y="0" width="1450" height="18" rx="8" fill="url(#shelf)"/>
+    <g fill="#7fa9ea">
+      <rect x="28" y="-120" width="42" height="120" rx="6"/>
+      <rect x="80" y="-155" width="30" height="155" rx="6"/>
+      <rect x="118" y="-95" width="36" height="95" rx="6"/>
+      <rect x="165" y="-135" width="44" height="135" rx="6"/>
+      <rect x="222" y="-105" width="34" height="105" rx="6"/>
+      <rect x="267" y="-168" width="40" height="168" rx="6"/>
+      <rect x="320" y="-118" width="32" height="118" rx="6"/>
+      <rect x="365" y="-146" width="46" height="146" rx="6"/>
+      <rect x="425" y="-90" width="28" height="90" rx="6"/>
+      <rect x="463" y="-160" width="42" height="160" rx="6"/>
+      <rect x="517" y="-128" width="34" height="128" rx="6"/>
+      <rect x="563" y="-150" width="39" height="150" rx="6"/>
+      <rect x="615" y="-102" width="30" height="102" rx="6"/>
+      <rect x="657" y="-175" width="44" height="175" rx="6"/>
+      <rect x="712" y="-110" width="36" height="110" rx="6"/>
+      <rect x="760" y="-158" width="40" height="158" rx="6"/>
+      <rect x="812" y="-94" width="30" height="94" rx="6"/>
+      <rect x="854" y="-140" width="42" height="140" rx="6"/>
+      <rect x="908" y="-118" width="34" height="118" rx="6"/>
+      <rect x="954" y="-164" width="40" height="164" rx="6"/>
+      <rect x="1006" y="-99" width="28" height="99" rx="6"/>
+      <rect x="1044" y="-150" width="44" height="150" rx="6"/>
+      <rect x="1100" y="-122" width="35" height="122" rx="6"/>
+      <rect x="1146" y="-172" width="42" height="172" rx="6"/>
+      <rect x="1201" y="-112" width="33" height="112" rx="6"/>
+      <rect x="1244" y="-156" width="40" height="156" rx="6"/>
+      <rect x="1296" y="-96" width="30" height="96" rx="6"/>
+      <rect x="1338" y="-148" width="43" height="148" rx="6"/>
+    </g>
+  </g>
+
+  <g stroke="#95b8ef" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.6">
+    <path d="M145 192 C280 120 380 252 500 186"/>
+    <path d="M1110 220 C1215 160 1348 248 1455 184"/>
+    <path d="M682 128 C760 86 836 164 914 124"/>
+  </g>
+</svg>
