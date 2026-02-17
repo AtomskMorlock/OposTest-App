@@ -224,6 +224,7 @@ let timeRemaining = 0;
 let isOvertime = false;
 let overtimeSeconds = 0;
 let timeUpPromptOpen = false;
+let clockModeRecordTarget = 0;
 let baseAnsweredIds = new Set();
 let baseCounts = { correct: 0, wrong: 0, noSe: 0 };
 let baseTestIdSet = new Set();
@@ -294,6 +295,7 @@ const examStartBtn = document.getElementById("btn-exam-start");
 const examCloseBtn = document.getElementById("btn-exam-close");
 
 let openTestModalTimer = null;
+let homeActionTimer = null;
 const voiceSettingsBtn = document.getElementById("btn-voice-settings");
 const voiceSettingsBackBtn = document.getElementById("btn-voice-back");
 const openImportBtn = document.getElementById("btn-open-import");
@@ -318,6 +320,38 @@ const modalOverlay = document.getElementById("app-modal-overlay");
 const modalTitle = document.getElementById("app-modal-title");
 const modalMessage = document.getElementById("app-modal-message");
 const modalActions = document.getElementById("app-modal-actions");
+
+function showPauseExplanationOverlay(text) {
+  const msg = String(text || "").trim();
+  let box = document.getElementById("pause-explanation-overlay");
+  if (!msg) {
+    if (box) box.remove();
+    return;
+  }
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "pause-explanation-overlay";
+    document.body.appendChild(box);
+  }
+  box.textContent = msg;
+}
+
+function hidePauseExplanationOverlay() {
+  const box = document.getElementById("pause-explanation-overlay");
+  if (box) box.remove();
+}
+
+function positionPauseExplanationOverlay() {
+  const box = document.getElementById("pause-explanation-overlay");
+  if (!box) return;
+  const modal = modalOverlay ? modalOverlay.querySelector(".modal") : null;
+  if (!modal) return;
+  const modalRect = modal.getBoundingClientRect();
+  const boxRect = box.getBoundingClientRect();
+  const gapTop = Math.max(0, modalRect.top);
+  const centeredTop = Math.max(12, Math.round((gapTop - boxRect.height) / 2));
+  box.style.top = `${centeredTop}px`;
+}
 
 function openModal({ title, message, actions, titleAlign, actionsClassName, hideTitle = false, hideMessage = false }) {
   return new Promise(resolve => {
@@ -414,6 +448,34 @@ function showConfirm(message, opts = {}) {
 
 const buttonPressTimers = new WeakMap();
 const elementPressTimers = new WeakMap();
+const HOME_PRESS_DELAY_MS = 150;
+const HOME_EXPAND_MIN_MS = 170;
+const HOME_EXPAND_MAX_MS = 620;
+const HOME_EXPAND_MS_PER_PX = 1.1;
+
+function clampNumber(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function calcProportionalExpandMs(fromPx, toPx) {
+  const delta = Math.max(1, Math.abs((Number(toPx) || 0) - (Number(fromPx) || 0)));
+  return clampNumber(Math.round(delta * HOME_EXPAND_MS_PER_PX), HOME_EXPAND_MIN_MS, HOME_EXPAND_MAX_MS);
+}
+
+function applyHomeExpandTiming(el, fromPx, toPx) {
+  if (!(el instanceof HTMLElement)) return HOME_EXPAND_MIN_MS;
+  const ms = calcProportionalExpandMs(fromPx, toPx);
+  el.style.setProperty("--home-expand-duration", `${ms}ms`);
+  return ms;
+}
+
+function scheduleHomeAction(fn) {
+  if (homeActionTimer) clearTimeout(homeActionTimer);
+  homeActionTimer = setTimeout(() => {
+    homeActionTimer = null;
+    fn();
+  }, HOME_PRESS_DELAY_MS);
+}
 function flashElementPress(el) {
   if (!(el instanceof HTMLElement)) return;
   const prev = elementPressTimers.get(el);
@@ -424,7 +486,7 @@ function flashElementPress(el) {
   const timerId = setTimeout(() => {
     el.classList.remove("panel-press-flash");
     elementPressTimers.delete(el);
-  }, 150);
+  }, HOME_PRESS_DELAY_MS);
   elementPressTimers.set(el, timerId);
 }
 
@@ -439,7 +501,7 @@ function flashButtonPress(btn) {
   const timerId = setTimeout(() => {
     btn.classList.remove("btn-press-flash");
     buttonPressTimers.delete(btn);
-  }, 150);
+  }, HOME_PRESS_DELAY_MS);
   buttonPressTimers.set(btn, timerId);
 
   if (btn.id === "btn-open-test-modal") {
@@ -448,6 +510,15 @@ function flashButtonPress(btn) {
   } else if (btn.id === "home-btn-quick") {
     const homeQuickRow = document.getElementById("home-quick-row");
     flashElementPress(homeQuickRow);
+  } else if (btn.id === "home-btn-exam") {
+    const homeExamRow = document.getElementById("home-exam-row");
+    flashElementPress(homeExamRow);
+  } else if (btn.id === "home-btn-clock") {
+    const homeClockRow = document.getElementById("home-clock-row");
+    flashElementPress(homeClockRow);
+  } else if (btn.id === "home-btn-review") {
+    const homeReviewRow = document.getElementById("home-review-row");
+    flashElementPress(homeReviewRow);
   }
 }
 
@@ -1118,9 +1189,32 @@ function formatTime(sec) {
   return `${m}:${s}`;
 }
 
+function formatSpeedTime(sec) {
+  const safe = Math.max(0, Math.round(Number(sec) || 0));
+  const m = Math.floor(safe / 60);
+  const s = String(safe % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
 function formatTimerDisplay() {
   if (isOvertime) return `+${formatTime(overtimeSeconds)}`;
   return formatTime(timeRemaining);
+}
+
+function isClockModeValue(modeValue = mode) {
+  return /^clock-(1|5)m$/.test(String(modeValue || ""));
+}
+
+function isSurvivalModeValue(modeValue = mode) {
+  return String(modeValue || "") === "survival";
+}
+
+function isArcadeModeValue(modeValue = mode) {
+  return isClockModeValue(modeValue) || isSurvivalModeValue(modeValue);
+}
+
+function isStatsEligibleHistoryEntry(entry) {
+  return !!(entry && entry.finished !== false && !isArcadeModeValue(entry.mode));
 }
 
 function normalizeForMatch(str) {
@@ -1198,7 +1292,31 @@ function getLocalDaySerial(dateObj) {
   );
 }
 
+function getDebugHomeStreakOverrideDays() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const raw = params.get("debug_streak_days");
+    if (raw == null || raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.floor(n);
+  } catch {
+    return null;
+  }
+}
+
 function buildHomeLastTestInfo(entries) {
+  const debugStreak = getDebugHomeStreakOverrideDays();
+  if (debugStreak !== null) {
+    return {
+      displayText: `Racha: ${debugStreak} ${debugStreak === 1 ? "día" : "días"}`,
+      subText: "Simulación",
+      isStreak: debugStreak > 0,
+      streakDays: debugStreak,
+      daysAgo: 0
+    };
+  }
+
   const rows = asArray(entries)
     .filter(e => e && e.finished !== false)
     .filter(e => ((Number(e?.correct) || 0) + (Number(e?.wrong) || 0) + (Number(e?.noSe) || 0)) > 0)
@@ -1211,7 +1329,13 @@ function buildHomeLastTestInfo(entries) {
     .filter(Boolean);
 
   if (!rows.length) {
-    return { displayText: "Sin tests finalizados", isStreak: false };
+    return {
+      displayText: "Racha: 0 días",
+      subText: "Sin tests finalizados",
+      isStreak: false,
+      streakDays: 0,
+      daysAgo: null
+    };
   }
 
   const last = rows.reduce((best, cur) => (cur.ts > best.ts ? cur : best), rows[0]);
@@ -1227,14 +1351,52 @@ function buildHomeLastTestInfo(entries) {
   if (streak > 0) {
     return {
       displayText: `Racha: ${streak} ${streak === 1 ? "día" : "días"}`,
-      isStreak: true
+      subText: "",
+      isStreak: true,
+      streakDays: streak,
+      daysAgo
     };
   }
 
   return {
-    displayText: `Último test hace ${daysAgo} ${daysAgo === 1 ? "día" : "días"}`,
-    isStreak: false
+    displayText: "Racha: 0 días",
+    subText: `Último test hace ${daysAgo} ${daysAgo === 1 ? "día" : "días"}`,
+    isStreak: false,
+    streakDays: 0,
+    daysAgo
   };
+}
+
+function buildHomeStreakCardHtml(info) {
+  const streakDays = Math.max(0, Number(info?.streakDays) || 0);
+  const onCount = Math.min(7, streakDays);
+  const isMaxStreak = streakDays >= 7;
+  const flames = Array.from({ length: 7 }, (_, i) => {
+    const cls = i < onCount ? "is-on" : "is-off";
+    return `<span class="streak-flame ${cls}" aria-hidden="true">🔥</span>`;
+  }).join("");
+  const subText = String(info?.subText || "").trim();
+  return `
+    <div class="streak-main ${isMaxStreak ? "is-max-streak" : ""}">
+      <div class="streak-texts">
+        <div class="streak-text">${escapeHtml(String(info?.displayText || "Racha: 0 días"))}</div>
+        ${subText ? `<div class="streak-subtext">${escapeHtml(subText)}</div>` : ""}
+      </div>
+      <div class="streak-flames" aria-label="Racha de 7 días">${flames}</div>
+    </div>
+  `;
+}
+
+function getClockBest(modeKey) {
+  const rows = asArray(lsGetJSON(LS_HISTORY, []))
+    .filter(e => e && e.finished !== false)
+    .filter(e => String(e.mode || "") === String(modeKey || ""));
+  let best = 0;
+  for (const e of rows) {
+    const c = Number(e?.correct) || 0;
+    if (c > best) best = c;
+  }
+  return best;
 }
 
 function getAppVersion() {
@@ -1628,6 +1790,59 @@ function getHomeReviewPreset(totalPending) {
   return { counts: [10, 20, 50, 100] };
 }
 
+function getAvailableExamBlocks() {
+  const bloques = [...new Set((questions || []).map(q => q.bloque || "Sin bloque"))];
+  const blockNumber = (name) => {
+    const m = String(name || "").match(/bloque\s*(\d+)/i);
+    return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
+  };
+  return bloques.sort((a, b) => {
+    const na = blockNumber(a);
+    const nb = blockNumber(b);
+    if (na !== nb) return na - nb;
+    return String(a).localeCompare(String(b), "es", { sensitivity: "base" });
+  });
+}
+
+function splitBloqueInfo(rawBloque) {
+  const text = String(rawBloque || "").trim();
+  const m = text.match(/^Bloque\s*(\d+)\.?\s*(.*)$/i) || text.match(/^(\d+)\.?\s*(.*)$/);
+  if (m) {
+    return {
+      number: String(m[1] || "").trim(),
+      name: String(m[2] || "").trim()
+    };
+  }
+  return { number: "", name: text };
+}
+
+function splitTemaInfo(rawTema) {
+  const text = String(rawTema || "").trim();
+  const m = text.match(/^(\d{1,3})\s*\.\s*(.*)$/);
+  if (m) {
+    return {
+      number: String(m[1] || "").trim(),
+      name: String(m[2] || "").trim()
+    };
+  }
+  return { number: "", name: text };
+}
+
+function buildExplanationText(q) {
+  const bloqueInfo = splitBloqueInfo(q?.bloque);
+  const temaInfo = splitTemaInfo(q?.tema);
+
+  const bloqueLine = bloqueInfo.number
+    ? `Bloque ${bloqueInfo.number}: ${bloqueInfo.name || "Sin nombre"}`
+    : `Bloque: ${bloqueInfo.name || "Sin bloque"}`;
+  const temaLine = temaInfo.number
+    ? `Tema ${temaInfo.number}: ${temaInfo.name || "Sin nombre"}`
+    : `Tema: ${temaInfo.name || "Sin tema"}`;
+
+  const exp = String(q?.explicacion || "").trim();
+  return `${bloqueLine}\n${temaLine}${exp ? `\n\n${exp}` : ""}`;
+}
+
 function openHomeStartPanel() {
   if (homeConfigOpenTimer) {
     clearTimeout(homeConfigOpenTimer);
@@ -1635,30 +1850,49 @@ function openHomeStartPanel() {
   }
   closeHomeConfigPanel();
   closeHomeQuickPanel();
+  closeHomeExamPanel();
+  closeHomeClockPanel();
   closeHomeReviewPanel();
   const row = document.getElementById("main-primary-row");
   const panel = document.getElementById("home-start-panel");
   if (!row || !panel) return;
+  const fromPx = 56;
+  const toPx = Math.max(fromPx, panel.scrollHeight + 56);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  applyHomeExpandTiming(panel, fromPx, toPx);
+  panel.style.setProperty("--home-panel-open-height", `${toPx}px`);
   row.classList.add("is-start-open");
   panel.setAttribute("aria-hidden", "false");
 }
 
 function closeHomeStartPanel() {
   closeHomeQuickPanel();
+  closeHomeExamPanel();
+  closeHomeClockPanel();
   closeHomeReviewPanel();
   const row = document.getElementById("main-primary-row");
   const panel = document.getElementById("home-start-panel");
   if (!row || !panel) return;
+  const fromPx = Math.max(56, panel.scrollHeight + 56);
+  const toPx = 56;
+  applyHomeExpandTiming(row, fromPx, toPx);
+  applyHomeExpandTiming(panel, fromPx, toPx);
   row.classList.remove("is-start-open");
   panel.setAttribute("aria-hidden", "true");
 }
 
 function openHomeQuickPanel() {
+  closeHomeExamPanel();
+  closeHomeClockPanel();
   closeHomeReviewPanel();
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-quick-row");
   const panel = document.getElementById("home-quick-panel");
   if (!row || !panel) return;
+  const fromPx = 44;
+  const toPx = Math.max(fromPx + 80, fromPx + panel.scrollHeight + 16);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  row.style.setProperty("--home-row-open-height", `${toPx}px`);
   if (mainRow) mainRow.classList.add("is-quick-open");
   row.classList.add("is-quick-open");
   panel.setAttribute("aria-hidden", "false");
@@ -1668,6 +1902,101 @@ function closeHomeQuickPanel() {
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-quick-row");
   const panel = document.getElementById("home-quick-panel");
+  if (row) {
+    const fromPx = Math.max(44, row.scrollHeight);
+    const toPx = 44;
+    applyHomeExpandTiming(row, fromPx, toPx);
+  }
+  if (mainRow) mainRow.classList.remove("is-quick-open");
+  if (!row || !panel) return;
+  row.classList.remove("is-quick-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeExamPanel() {
+  closeHomeQuickPanel();
+  closeHomeClockPanel();
+  closeHomeReviewPanel();
+  closeHomeExamBlockPanel();
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-exam-row");
+  const panel = document.getElementById("home-exam-panel");
+  if (!row || !panel) return;
+  const fromPx = 44;
+  const toPx = Math.max(fromPx + 80, fromPx + panel.scrollHeight + 16);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  row.style.setProperty("--home-row-open-height", `${toPx}px`);
+  if (mainRow) mainRow.classList.add("is-quick-open");
+  row.classList.add("is-quick-open");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeHomeExamPanel() {
+  closeHomeExamBlockPanel();
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-exam-row");
+  const panel = document.getElementById("home-exam-panel");
+  if (row) {
+    const fromPx = Math.max(44, row.scrollHeight);
+    const toPx = 44;
+    applyHomeExpandTiming(row, fromPx, toPx);
+  }
+  if (mainRow) mainRow.classList.remove("is-quick-open");
+  if (!row || !panel) return;
+  row.classList.remove("is-quick-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeExamBlockPanel() {
+  const row = document.getElementById("home-exam-row");
+  const panel = document.getElementById("home-exam-block-panel");
+  if (!row || !panel) return;
+  const currentMax = Number.parseFloat(getComputedStyle(row).maxHeight) || 44;
+  const fromPx = Math.max(44, currentMax);
+  const toPx = Math.max(fromPx + 120, fromPx + panel.scrollHeight + 26);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  row.style.setProperty("--home-row-open-height-block", `${toPx}px`);
+  row.classList.add("is-block-open");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeHomeExamBlockPanel() {
+  const row = document.getElementById("home-exam-row");
+  const panel = document.getElementById("home-exam-block-panel");
+  if (!row || !panel) return;
+  const fromPx = Math.max(44, Number.parseFloat(getComputedStyle(row).maxHeight) || row.scrollHeight || 44);
+  const toPx = Math.max(44, Number.parseFloat(row.style.getPropertyValue("--home-row-open-height")) || 44);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  row.classList.remove("is-block-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeClockPanel() {
+  closeHomeExamPanel();
+  closeHomeQuickPanel();
+  closeHomeReviewPanel();
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-clock-row");
+  const panel = document.getElementById("home-clock-panel");
+  if (!row || !panel) return;
+  const fromPx = 44;
+  const toPx = Math.max(fromPx + 80, fromPx + panel.scrollHeight + 16);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  row.style.setProperty("--home-row-open-height", `${toPx}px`);
+  if (mainRow) mainRow.classList.add("is-quick-open");
+  row.classList.add("is-quick-open");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeHomeClockPanel() {
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-clock-row");
+  const panel = document.getElementById("home-clock-panel");
+  if (row) {
+    const fromPx = Math.max(44, row.scrollHeight);
+    const toPx = 44;
+    applyHomeExpandTiming(row, fromPx, toPx);
+  }
   if (mainRow) mainRow.classList.remove("is-quick-open");
   if (!row || !panel) return;
   row.classList.remove("is-quick-open");
@@ -1675,11 +2004,18 @@ function closeHomeQuickPanel() {
 }
 
 function openHomeReviewPanel() {
+  closeHomeExamPanel();
   closeHomeQuickPanel();
+  closeHomeClockPanel();
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-review-row");
   const panel = document.getElementById("home-review-panel");
   if (!row || !panel) return;
+  const fromPx = 44;
+  const toPx = Math.max(fromPx + 80, fromPx + panel.scrollHeight + 16);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  applyHomeExpandTiming(panel, fromPx, toPx);
+  row.style.setProperty("--home-row-open-height-review", `${toPx}px`);
   if (mainRow) mainRow.classList.add("is-review-open");
   row.classList.add("is-review-open");
   panel.setAttribute("aria-hidden", "false");
@@ -1689,6 +2025,12 @@ function closeHomeReviewPanel() {
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-review-row");
   const panel = document.getElementById("home-review-panel");
+  if (panel) {
+    const fromPx = Math.max(44, Number.parseFloat(getComputedStyle(row).maxHeight) || row.scrollHeight || 44);
+    const toPx = 44;
+    applyHomeExpandTiming(row, fromPx, toPx);
+    applyHomeExpandTiming(panel, fromPx, toPx);
+  }
   if (mainRow) mainRow.classList.remove("is-review-open");
   if (!row || !panel) return;
   row.classList.remove("is-review-open");
@@ -1705,6 +2047,11 @@ function openHomeConfigPanel(instant = false) {
   const row = document.getElementById("main-config-row");
   const panel = document.getElementById("home-config-panel");
   if (!row || !panel) return;
+  const fromPx = 56;
+  const toPx = Math.max(fromPx, panel.scrollHeight + 56);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  applyHomeExpandTiming(panel, fromPx, toPx);
+  panel.style.setProperty("--home-panel-open-height", `${toPx}px`);
   if (instant) row.classList.add("is-config-instant");
   row.classList.add("is-config-open");
   panel.setAttribute("aria-hidden", "false");
@@ -1724,6 +2071,10 @@ function closeHomeConfigPanel() {
   const row = document.getElementById("main-config-row");
   const panel = document.getElementById("home-config-panel");
   if (!row || !panel) return;
+  const fromPx = Math.max(56, panel.scrollHeight + 56);
+  const toPx = 56;
+  applyHomeExpandTiming(row, fromPx, toPx);
+  applyHomeExpandTiming(panel, fromPx, toPx);
   row.classList.remove("is-config-open");
   panel.setAttribute("aria-hidden", "true");
 }
@@ -1789,7 +2140,7 @@ function showMainMenu() {
   const homeLastInfo = buildHomeLastTestInfo(hist);
 
   const reviewBtn = document.getElementById("btn-review");
-  if (reviewBtn) reviewBtn.textContent = `Fallos (${pendingCount})`;
+  if (reviewBtn) reviewBtn.textContent = `Fallos ❌ (${pendingCount})`;
 
   const rowPaused = document.getElementById("modal-row-paused");
   if (rowPaused) {
@@ -1802,8 +2153,15 @@ function showMainMenu() {
   }
 
   const reviewPreset = getHomeReviewPreset(pendingCount);
+  const clockBest1m = getClockBest("clock-1m");
+  const clockBest5m = getClockBest("clock-5m");
+  const survivalBest = getClockBest("survival");
+  const examBlocks = getAvailableExamBlocks();
   const reviewQuickButtonsHtml = reviewPreset.counts
     .map(n => `<button type="button" class="secondary home-review-option" data-limit="${n}">${n}</button>`)
+    .join("");
+  const examBlockButtonsHtml = examBlocks
+    .map(b => `<button type="button" class="secondary home-exam-block-option" data-block="${escapeHtml(String(b))}">${escapeHtml(String(b))}</button>`)
     .join("");
 
   extraBox.innerHTML = `
@@ -1830,26 +2188,48 @@ function showMainMenu() {
             <button id="home-btn-custom" class="secondary home-start-option">Personalizado</button>
           </div>
           <div class="row home-start-row single" id="home-review-row">
-            <button id="home-btn-review" class="secondary home-start-option">Fallos (${pendingCount})</button>
+            <button id="home-btn-review" class="secondary home-start-option">Fallos ❌ (${pendingCount})</button>
             <div id="home-review-panel" class="home-review-panel" aria-hidden="true">
-              <div class="home-review-panel-title">Fallos (${pendingCount})</div>
+              <div class="home-review-panel-title">Fallos ❌ (${pendingCount})</div>
               <div class="row home-review-buttons">
                 ${reviewQuickButtonsHtml}
                 <button type="button" class="secondary home-review-option" data-limit="all" ${pendingCount === 0 ? "disabled" : ""}>Todas</button>
               </div>
             </div>
           </div>
+          <div class="row home-start-row single" id="home-exam-row">
+            <button id="home-btn-exam" class="secondary home-start-option">Modo examen 📝</button>
+            <div id="home-exam-panel" class="home-quick-panel" aria-hidden="true">
+              <div class="row home-exam-buttons">
+                <button id="home-btn-exam-full" class="secondary home-quick-option">Completo (100)</button>
+                <div id="home-exam-block-row" class="home-exam-block-row">
+                  <button id="home-btn-exam-by-block" class="secondary home-quick-option">Por bloque (20)</button>
+                  <div id="home-exam-block-panel" class="home-exam-block-panel" aria-hidden="true">
+                    <div class="row home-exam-block-buttons">
+                      ${examBlockButtonsHtml}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row home-start-row single" id="home-clock-row">
+            <button id="home-btn-clock" class="secondary home-start-option">Contrarreloj ⏱️</button>
+            <div id="home-clock-panel" class="home-quick-panel" aria-hidden="true">
+              <div class="row home-quick-buttons">
+                <button id="home-btn-clock-1m" class="secondary home-quick-option">1m 🔥 ${clockBest1m}</button>
+                <button id="home-btn-clock-5m" class="secondary home-quick-option">5m 🔥 ${clockBest5m}</button>
+              </div>
+            </div>
+          </div>
           <div class="row home-start-row single">
-            <button id="home-btn-exam" class="secondary home-start-option">Modo examen</button>
+            <button id="home-btn-survival" class="secondary home-start-option">Supervivencia 💀 🔥 ${survivalBest}</button>
           </div>
           ${paused ? `
             <div class="row home-start-row single">
               <button id="home-btn-cancel-paused" class="secondary home-start-option">Cancelar test pausado</button>
             </div>
           ` : ""}
-          <div class="row home-start-row single">
-            <button id="home-btn-close-start" class="secondary home-start-option">Cerrar</button>
-          </div>
         </div>
       </div>
       <div class="row" id="main-config-row">
@@ -1881,14 +2261,13 @@ function showMainMenu() {
             <button id="home-btn-stats" class="secondary home-config-option">Estadísticas</button>
           </div>
           <div class="row home-config-row single">
-            <button id="home-btn-close-config" class="secondary home-config-option">Cerrar</button>
+            <button id="home-btn-darkmode" class="secondary home-config-option">Modo oscuro</button>
           </div>
         </div>
       </div>
       <div class="row" id="main-meta-row">
-        <div id="main-darkmode-row"></div>
-        <div class="small" id="main-last-test" style="text-align:center;margin-top:8px;">
-          <div class="${homeLastInfo.isStreak ? "home-streak" : ""}">${escapeHtml(homeLastInfo.displayText)}</div>
+        <div class="small ${Number(homeLastInfo?.streakDays || 0) >= 7 ? "is-max-streak" : ""}" id="main-last-test" style="text-align:center;margin-top:8px;">
+          ${buildHomeStreakCardHtml(homeLastInfo)}
         </div>
       </div>
     </div>
@@ -1914,9 +2293,19 @@ function showMainMenu() {
   if (homeStartPanelTitle) homeStartPanelTitle.onclick = () => closeHomeStartPanel();
   const homeBtnQuick = document.getElementById("home-btn-quick");
   if (homeBtnQuick) homeBtnQuick.onclick = () => {
-    const quickRow = document.getElementById("home-quick-row");
-    if (quickRow && quickRow.classList.contains("is-quick-open")) closeHomeQuickPanel();
-    else openHomeQuickPanel();
+    scheduleHomeAction(() => {
+      const quickRow = document.getElementById("home-quick-row");
+      if (quickRow && quickRow.classList.contains("is-quick-open")) closeHomeQuickPanel();
+      else openHomeQuickPanel();
+    });
+  };
+  const homeBtnClock = document.getElementById("home-btn-clock");
+  if (homeBtnClock) homeBtnClock.onclick = () => {
+    scheduleHomeAction(() => {
+      const clockRow = document.getElementById("home-clock-row");
+      if (clockRow && clockRow.classList.contains("is-quick-open")) closeHomeClockPanel();
+      else openHomeClockPanel();
+    });
   };
   const homeBtnQuick10 = document.getElementById("home-btn-quick-10");
   if (homeBtnQuick10) homeBtnQuick10.onclick = () => {
@@ -1928,6 +2317,21 @@ function showMainMenu() {
     closeHomeStartPanel();
     startQuickTest(20, 20);
   };
+  const homeBtnClock1m = document.getElementById("home-btn-clock-1m");
+  if (homeBtnClock1m) homeBtnClock1m.onclick = () => {
+    closeHomeStartPanel();
+    startClockMode(1);
+  };
+  const homeBtnClock5m = document.getElementById("home-btn-clock-5m");
+  if (homeBtnClock5m) homeBtnClock5m.onclick = () => {
+    closeHomeStartPanel();
+    startClockMode(5);
+  };
+  const homeBtnSurvival = document.getElementById("home-btn-survival");
+  if (homeBtnSurvival) homeBtnSurvival.onclick = () => {
+    closeHomeStartPanel();
+    startSurvivalMode();
+  };
   const homeBtnCustom = document.getElementById("home-btn-custom");
   if (homeBtnCustom) homeBtnCustom.onclick = () => {
     closeHomeStartPanel();
@@ -1935,13 +2339,15 @@ function showMainMenu() {
   };
   const homeBtnReview = document.getElementById("home-btn-review");
   if (homeBtnReview) homeBtnReview.onclick = () => {
-    if (pendingCount === 0) {
-      startReviewPending();
-      return;
-    }
-    const row = document.getElementById("home-review-row");
-    if (row && row.classList.contains("is-review-open")) closeHomeReviewPanel();
-    else openHomeReviewPanel();
+    scheduleHomeAction(() => {
+      if (pendingCount === 0) {
+        startReviewPending();
+        return;
+      }
+      const row = document.getElementById("home-review-row");
+      if (row && row.classList.contains("is-review-open")) closeHomeReviewPanel();
+      else openHomeReviewPanel();
+    });
   };
   const homeReviewQuickButtons = document.querySelectorAll(".home-review-option");
   homeReviewQuickButtons.forEach(btn => {
@@ -1954,28 +2360,61 @@ function showMainMenu() {
   });
   const homeBtnExam = document.getElementById("home-btn-exam");
   if (homeBtnExam) homeBtnExam.onclick = () => {
-    closeHomeStartPanel();
-    openExamSourceModal();
+    scheduleHomeAction(() => {
+      const examRow = document.getElementById("home-exam-row");
+      if (examRow && examRow.classList.contains("is-quick-open")) {
+        closeHomeExamPanel();
+        return;
+      }
+      openHomeExamPanel();
+    });
   };
-  const homeBtnCloseStart = document.getElementById("home-btn-close-start");
-  if (homeBtnCloseStart) homeBtnCloseStart.onclick = () => closeHomeStartPanel();
+  const homeBtnExamFull = document.getElementById("home-btn-exam-full");
+  if (homeBtnExamFull) homeBtnExamFull.onclick = () => {
+    closeHomeStartPanel();
+    startExamFull();
+  };
+  const homeBtnExamByBlock = document.getElementById("home-btn-exam-by-block");
+  if (homeBtnExamByBlock) homeBtnExamByBlock.onclick = () => {
+    scheduleHomeAction(() => {
+      const row = document.getElementById("home-exam-row");
+      if (row && row.classList.contains("is-block-open")) {
+        closeHomeExamBlockPanel();
+        return;
+      }
+      openHomeExamBlockPanel();
+    });
+  };
+  const homeExamBlockOptions = document.querySelectorAll(".home-exam-block-option");
+  homeExamBlockOptions.forEach(btn => {
+    btn.onclick = () => {
+      const bloque = String(btn.getAttribute("data-block") || "").trim();
+      if (!bloque) return;
+      closeHomeStartPanel();
+      startExamByBlock(bloque);
+    };
+  });
   const homeStartOptions = document.querySelectorAll(".home-start-option");
   homeStartOptions.forEach((btn, idx) => {
-    btn.style.setProperty("--home-delay", `${idx * 70}ms`);
+    const delay = `${idx * 70}ms`;
+    btn.style.setProperty("--home-delay", delay);
+    const row = btn.closest(".home-start-row");
+    if (row && (row.id === "home-quick-row" || row.id === "home-exam-row" || row.id === "home-clock-row" || row.id === "home-review-row")) {
+      row.style.setProperty("--home-row-delay", delay);
+    }
   });
 
   const openConfigBtnNow = document.getElementById("btn-open-config");
   if (openConfigBtnNow) {
     openConfigBtnNow.onclick = () => {
-      const configRow = document.getElementById("main-config-row");
-      if (configRow && configRow.classList.contains("is-config-open")) {
-        closeHomeConfigPanel();
-        return;
-      }
-      if (homeConfigOpenTimer) clearTimeout(homeConfigOpenTimer);
-      homeConfigOpenTimer = setTimeout(() => {
+      scheduleHomeAction(() => {
+        const configRow = document.getElementById("main-config-row");
+        if (configRow && configRow.classList.contains("is-config-open")) {
+          closeHomeConfigPanel();
+          return;
+        }
         openHomeConfigPanel();
-      }, 160);
+      });
     };
   }
   const homeConfigPanelTitle = document.querySelector("#main-config-row .home-config-panel-title");
@@ -2020,8 +2459,6 @@ function showMainMenu() {
       ttsApplyUIState();
     };
   }
-  const homeBtnCloseConfig = document.getElementById("home-btn-close-config");
-  if (homeBtnCloseConfig) homeBtnCloseConfig.onclick = () => closeHomeConfigPanel();
   ttsPopulateVoiceButtons();
   ttsApplyUIState();
 
@@ -2083,14 +2520,14 @@ function openTestStartModal() {
   if (document.body.classList.contains("is-home-screen")) {
     const startRow = document.getElementById("main-primary-row");
     if (startRow && startRow.classList.contains("is-start-open")) {
-      closeHomeStartPanel();
+      scheduleHomeAction(() => closeHomeStartPanel());
       return;
     }
     if (openTestModalTimer) clearTimeout(openTestModalTimer);
     openTestModalTimer = setTimeout(() => {
       openHomeStartPanel();
       openTestModalTimer = null;
-    }, 180);
+    }, HOME_PRESS_DELAY_MS);
     return;
   }
   if (!testStartModal) return;
@@ -2099,7 +2536,7 @@ function openTestStartModal() {
     testStartModal.style.display = "flex";
     testStartModal.setAttribute("aria-hidden", "false");
     openTestModalTimer = null;
-  }, 220);
+  }, HOME_PRESS_DELAY_MS);
 }
 
 function closeTestStartModal() {
@@ -2132,9 +2569,11 @@ function showVoiceSettingsScreen() {
 
 function showTestScreen() {
   hideAll();
-  testContainer.style.display = "block";
+  const isMobileViewport = window.matchMedia && window.matchMedia("(max-width: 700px)").matches;
+  testContainer.style.display = isMobileViewport ? "flex" : "block";
   ensurePauseAndFinishUI();
   updateModePill();
+  updateTestTopUiForMode();
   ttsApplyUIState();
 }
 
@@ -2158,9 +2597,9 @@ function showReviewScreen() {
     const optionsHtml = (a.opciones || []).map(opt => {
       const isChosen = a.elegida && opt === a.elegida;
       const isCorrect = a.correcta && opt === a.correcta;
-      let style = "padding:8px;border:1px solid #b8d8ff;border-radius:10px;margin:6px 0;background:white;";
-      if (isCorrect) style += "background:#e9f7ee;border-color:#9ad3b0;";
-      if (isChosen && !isCorrect) style += "background:#ffe8e8;border-color:#ffb3b3;";
+      let style = "padding:8px;border:1px solid var(--border);border-radius:10px;margin:6px 0;background:var(--surface);";
+      if (isCorrect) style += "background:var(--success-soft);border-color:var(--success-border);";
+      if (isChosen && !isCorrect) style += "background:var(--error-soft);border-color:var(--error-border);";
       return `<div style="${style}">${escapeHtml(opt)}</div>`;
     }).join("");
 
@@ -2182,7 +2621,7 @@ function showStatsScreen() {
 
   const stats = getStats();
   const histRaw = lsGetJSON(LS_HISTORY, []);
-  const hist = asArray(histRaw).filter(h => h && h.finished !== false);
+  const hist = asArray(histRaw).filter(isStatsEligibleHistoryEntry);
   const now = new Date();
   const last10Start = new Date(now);
   last10Start.setHours(0, 0, 0, 0);
@@ -2250,14 +2689,30 @@ function showStatsScreen() {
   const last10ScoreBruta = calcBruta(last10Totals.correct, last10Totals.wrong);
   const last10Score100 = calcNotaSobre100(last10Totals.correct, last10Totals.wrong, last10Totals.noSe);
 
+  const calcAvgSpeedFromHistory = (entries) => {
+    const agg = asArray(entries).reduce((acc, h) => {
+      const timeUsedSec = Number(h?.timeUsedSec);
+      const answered = (Number(h?.correct) || 0) + (Number(h?.wrong) || 0) + (Number(h?.noSe) || 0);
+      if (!Number.isFinite(timeUsedSec) || timeUsedSec < 0 || answered <= 0) return acc;
+      acc.time += timeUsedSec;
+      acc.answered += answered;
+      return acc;
+    }, { time: 0, answered: 0 });
+    if (!agg.answered) return 0;
+    return agg.time / agg.answered;
+  };
+
+  const histAvgSpeedSec = calcAvgSpeedFromHistory(hist);
+  const last10AvgSpeedSec = calcAvgSpeedFromHistory(histLast10);
+
   const renderAccuracyCircle = (title, correct, wrong, noSe) => {
     const total = correct + wrong + noSe;
     const pct = total ? Math.round((correct / total) * 100) : 0;
     const wrongPct = 100 - pct;
     return `
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-        <div style="position:relative;width:140px;height:140px;border-radius:50%;background:conic-gradient(#2e8b57 0 ${pct}%, #d9534f ${pct}% 100%);display:flex;align-items:center;justify-content:center;">
-          <div style="width:108px;height:108px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:inset 0 0 0 1px #e6e6e6;">
+        <div style="position:relative;width:140px;height:140px;border-radius:50%;background:conic-gradient(var(--accent-success) 0 ${pct}%, var(--accent-danger) ${pct}% 100%);display:flex;align-items:center;justify-content:center;">
+          <div style="width:108px;height:108px;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--border) 75%, transparent);">
             <div style="font-weight:700;font-size:20px;">${pct}%</div>
             <div class="small">Aciertos</div>
           </div>
@@ -2308,6 +2763,7 @@ function showStatsScreen() {
         <div style="height:6px;"></div>
         <div><strong>Porcentaje de acierto:</strong> ${histAccuracy.toFixed(1)}%</div>
         <div><strong>Nota media:</strong> ${histScore100.toFixed(1)}/100</div>
+        <div><strong>Velocidad media:</strong> ${formatSpeedTime(histAvgSpeedSec)}</div>
         <div class="stats-circle">
           ${renderAccuracyCircle("Histórico total", histTotals.correct, histTotals.wrong, histTotals.noSe)}
         </div>
@@ -2324,6 +2780,7 @@ function showStatsScreen() {
         <div style="height:6px;"></div>
         <div><strong>Porcentaje de acierto:</strong> ${last10Accuracy.toFixed(1)}%</div>
         <div><strong>Nota media:</strong> ${last10Score100.toFixed(1)}/100</div>
+        <div><strong>Velocidad media:</strong> ${formatSpeedTime(last10AvgSpeedSec)}</div>
         <div class="stats-circle">
           ${renderAccuracyCircle("Últimos 10 días", last10Totals.correct, last10Totals.wrong, last10Totals.noSe)}
         </div>
@@ -2385,14 +2842,33 @@ function ensurePauseAndFinishUI() {
 }
 
 function updateProgressUI() {
+  updateTestTopUiForMode();
   const textEl = document.getElementById("progress-text");
   const barEl = document.getElementById("progress-bar-fill");
   if (!textEl || !barEl) return;
+  if (isArcadeModeValue()) return;
   const total = currentTest.length || 0;
   const current = Math.min(currentIndex + 1, total);
   textEl.textContent = `${current}/${total}`;
   const pct = total ? (current / total) * 100 : 0;
   barEl.style.width = `${pct}%`;
+}
+
+function updateTestTopUiForMode() {
+  const progressWrap = document.getElementById("test-progress");
+  const progressText = document.getElementById("progress-text");
+  const isClockMode = isClockModeValue();
+  const isSurvivalMode = isSurvivalModeValue();
+  const isArcadeMode = isArcadeModeValue();
+  if (progressWrap) progressWrap.style.display = isArcadeMode ? "none" : "";
+  if (timerDisplay) timerDisplay.style.visibility = isSurvivalMode ? "hidden" : "";
+  if (progressText) {
+    progressText.style.display = isArcadeMode ? "" : "";
+    if (isArcadeMode) {
+      const fire = correctCount > clockModeRecordTarget ? " 🔥" : "";
+      progressText.textContent = `${correctCount}${fire}`;
+    }
+  }
 }
 
 function updateModePill() {
@@ -2456,27 +2932,58 @@ async function showPauseExitOptions() {
   stopTimer();
   ttsPrepareResumeFromPause();
   ttsStop();
+  let readCurrentQuestionOnContinue = false;
+  const pauseExplanationText = (viewState === "feedback" && answerExplanation)
+    ? String(answerExplanation.textContent || "").trim()
+    : "";
+  showPauseExplanationOverlay(pauseExplanationText);
   document.body.classList.add("is-pause-modal-open");
+  const handlePauseOverlayReposition = () => positionPauseExplanationOverlay();
+  window.addEventListener("resize", handlePauseOverlayReposition);
 
   let action = null;
   try {
-    action = await openModal({
-      hideTitle: true,
-      hideMessage: true,
-      actionsClassName: "modal-actions-vertical",
-      actions: [
-        { label: "Continuar", value: "continue", className: "secondary pause-exit-btn", role: "cancel", default: true },
-        { label: "Guardar y salir", value: "save", className: "secondary pause-exit-btn" },
-        { label: "Descartar y salir", value: "discard", className: "danger pause-exit-btn" }
-      ]
-    });
+    while (true) {
+      const modalPromise = openModal({
+        hideTitle: true,
+        hideMessage: true,
+        actionsClassName: "modal-actions-vertical",
+        actions: [
+          { label: "Continuar", value: "continue", className: "secondary pause-exit-btn", role: "cancel", default: true },
+          { label: "Leer en voz alta", value: "read", className: `${ttsSettings.enabled ? "success" : ""} pause-exit-btn` },
+          { label: "Guardar y salir", value: "save", className: "secondary pause-exit-btn" },
+          { label: "Descartar y salir", value: "discard", className: "danger pause-exit-btn" }
+        ]
+      });
+      requestAnimationFrame(handlePauseOverlayReposition);
+      setTimeout(handlePauseOverlayReposition, 40);
+      action = await modalPromise;
+      if (action !== "read") break;
+      ttsSettings.enabled = !ttsSettings.enabled;
+      if (!ttsSettings.enabled) {
+        ttsPausedResume = null;
+        readCurrentQuestionOnContinue = false;
+      } else if (!ttsPausedResume) {
+        // Si no había lectura en curso al pausar, leeremos al continuar.
+        readCurrentQuestionOnContinue = true;
+      }
+      ttsSaveSettings();
+      ttsApplyUIState();
+    }
   } finally {
+    window.removeEventListener("resize", handlePauseOverlayReposition);
     document.body.classList.remove("is-pause-modal-open");
+    hidePauseExplanationOverlay();
   }
 
   if (action === "continue") {
     if (shouldResumeTimer) startTimer();
-    ttsResumeAfterPauseIfNeeded();
+    if (readCurrentQuestionOnContinue && ttsSettings.enabled && viewState === "question") {
+      const q = currentTest[currentIndex];
+      ttsSpeakQuestion(q, currentIndex + 1, currentTest.length);
+    } else {
+      ttsResumeAfterPauseIfNeeded();
+    }
     return;
   }
   if (action === "discard") {
@@ -2519,6 +3026,9 @@ async function resumePausedTest() {
     countNonAnsweredAsWrongOnFinish: false,
     meta: {}
   };
+  clockModeRecordTarget = isArcadeModeValue(sessionOpts.mode)
+    ? Math.max(0, Number(sessionOpts?.meta?.clockRecordTarget) || 0)
+    : 0;
 
   currentTest = pool;
   currentIndex = Math.max(0, Math.min(saved.currentIndex || 0, currentTest.length));
@@ -2576,7 +3086,7 @@ async function resumePausedTest() {
     showAnswer(q, lastSelectedText);
   } else {
     showQuestion();
-    startTimer();
+    if (sessionOpts.timeSeconds > 0) startTimer();
   }
 }
 
@@ -2635,25 +3145,6 @@ function showTemaSelectionScreen() {
   const totalQuestions = questions.length;
 
   testMenu.innerHTML = `
-    <div style="display:flex;justify-content:center;align-items:center;margin-bottom:10px;">
-      <button id="btn-start-practice-top" class="success">Comenzar test</button>
-    </div>
-
-    <div id="custom-filter-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
-      <div style="font-weight:700;margin-bottom:6px;">Filtrar</div>
-      <div id="fuente-select-wrap" class="small"></div>
-    </div>
-
-    <div style="margin:12px 0;text-align:center;">
-      <div class="row" style="justify-content:center;margin:8px 0;">
-        <button id="btn-toggle-all">Marcar todas</button>
-        <button id="btn-less-used">Solo preguntas menos usadas</button>
-        <button id="btn-perfection-toggle">Perfeccionamiento</button>
-      </div>
-    </div>
-
-    <div id="tema-select-wrap"></div>
-
     <div id="custom-time-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
       <div style="font-weight:700;margin:8px 0 6px 0;">Nº de preguntas</div>
       <div class="row" id="num-questions-buttons" style="justify-content:center;margin-bottom:6px;">
@@ -2675,9 +3166,33 @@ function showTemaSelectionScreen() {
       <div id="selected-count" style="margin-top:8px;text-align:center;"><strong>Preguntas seleccionadas:</strong> 0</div>
     </div>
 
+    <div id="custom-filter-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
+      <div style="font-weight:700;margin-bottom:6px;">Filtrar</div>
+      <div id="fuente-select-wrap" class="small"></div>
+    </div>
+
+    <div id="custom-options-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
+      <div class="row" style="justify-content:center;margin:8px 0;">
+        <button id="btn-toggle-all">Marcar todas</button>
+        <button id="btn-less-used">Solo preguntas menos usadas</button>
+      </div>
+    </div>
+
+    <div id="custom-modes-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
+      <div style="font-weight:700;margin-bottom:6px;">Modos</div>
+      <div class="row" style="justify-content:center;margin:8px 0;">
+        <button id="btn-perfection-toggle">Perfeccionamiento</button>
+      </div>
+    </div>
+
+    <div id="tema-select-wrap"></div>
+
     <div id="tema-bottom-actions" style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
-      <button id="btn-start-practice" class="success">Comenzar test</button>
       <button id="btn-back-main" class="secondary">Volver</button>
+    </div>
+
+    <div id="tema-start-sticky" style="display:flex;justify-content:center;margin-top:12px;">
+      <button id="btn-start-practice" class="success">Iniciar test</button>
     </div>
   `;
 
@@ -2693,14 +3208,12 @@ function showTemaSelectionScreen() {
     const bloqueRow = document.createElement("div");
     bloqueRow.style.margin = "10px 0";
     bloqueRow.innerHTML = `
-      <div style="padding:10px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:white;">
-        <div style="display:flex;align-items:center;gap:8px;">
+      <div class="bloque-card">
+        <div class="bloque-head">
           <button type="button" class="bloque-expander" data-bloque="${escapeHtml(bloque)}" aria-expanded="false" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:none;background:transparent;font-weight:700;font-size:28px;line-height:1;cursor:pointer;padding:0;">+</button>
-          <span class="small bloque-count" data-bloque="${escapeHtml(bloque)}" data-total="${bloqueTotalQuestions}" style="min-width:64px;text-align:right;color:#4b5b74;">0/${bloqueTotalQuestions}</span>
-          <label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;">
-            <input type="checkbox" class="bloque-toggle" data-bloque="${escapeHtml(bloque)}">
-            ${escapeHtml(bloque)}
-          </label>
+          <span class="small bloque-count" data-bloque="${escapeHtml(bloque)}" data-total="${bloqueTotalQuestions}" style="min-width:64px;text-align:right;color:var(--muted);">0/${bloqueTotalQuestions}</span>
+          <span class="bloque-label">${escapeHtml(bloque)}</span>
+          <input type="checkbox" class="bloque-toggle" data-bloque="${escapeHtml(bloque)}" style="display:none;">
         </div>
         <div class="temas-list" data-bloque="${escapeHtml(bloque)}" style="margin-top:8px;padding-left:22px;display:none;"></div>
       </div>
@@ -2729,16 +3242,17 @@ function showTemaSelectionScreen() {
           temaText = temaDisplay;
         }
       }
-      const line = document.createElement("label");
+      const line = document.createElement("div");
+      line.className = "tema-line";
       line.style.display = "grid";
-      line.style.gridTemplateColumns = "36px 28px 44px 1fr";
+      line.style.gridTemplateColumns = "36px 44px 1fr";
       line.style.alignItems = "start";
-      line.style.columnGap = "4px";
+      line.style.columnGap = "6px";
       line.style.margin = "10px 0";
       line.style.cursor = "pointer";
       line.innerHTML = `
-        <span class="small tema-count" style="color:#4b5b74;text-align:right;line-height:1.2;">${counts.seen}/${counts.total}</span>
-        <input type="checkbox" class="tema-checkbox" data-bloque="${escapeHtml(bloque)}" data-tema-key="${escapeHtml(temaKey)}" data-total="${counts.total}" value="${escapeHtml(t)}" style="margin-top:2px;width:18px;height:18px;justify-self:center;">
+        <input type="checkbox" class="tema-checkbox" data-bloque="${escapeHtml(bloque)}" data-tema-key="${escapeHtml(temaKey)}" data-total="${counts.total}" value="${escapeHtml(t)}" style="display:none;">
+        <span class="small tema-count" style="color:var(--muted);text-align:right;line-height:1.2;">${counts.total}</span>
         <span style="display:block;line-height:1.35;text-align:left;">${escapeHtml(temaNum)}</span>
         <span style="display:block;line-height:1.35;text-align:justify;text-justify:inter-word;">${escapeHtml(temaText)}</span>
       `;
@@ -2800,9 +3314,11 @@ function showTemaSelectionScreen() {
     cb.addEventListener("change", () => {
       const b = cb.getAttribute("data-bloque");
       const checked = cb.checked;
+      cb.indeterminate = false;
       wrap.querySelectorAll(`.tema-checkbox[data-bloque="${cssEscape(b)}"]`).forEach(tcb => {
         tcb.checked = checked;
       });
+      syncBloqueToggleState(b);
       updateSelectedCount();
     });
   });
@@ -2819,6 +3335,33 @@ function showTemaSelectionScreen() {
     });
   });
 
+  wrap.querySelectorAll(".bloque-head").forEach(head => {
+    head.addEventListener("click", (ev) => {
+      if (ev.target && ev.target.closest(".bloque-expander")) return;
+      ev.preventDefault();
+      const cb = head.querySelector(".bloque-toggle");
+      if (!cb) return;
+      const card = head.closest(".bloque-card");
+      if (!card) {
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+      const prevTimer = Number(card.dataset.pressTimer || "0");
+      if (prevTimer) window.clearTimeout(prevTimer);
+      card.classList.remove("bloque-press-flash");
+      void card.offsetWidth;
+      card.classList.add("bloque-press-flash");
+      const timerId = window.setTimeout(() => {
+        card.classList.remove("bloque-press-flash");
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event("change", { bubbles: true }));
+        delete card.dataset.pressTimer;
+      }, 130);
+      card.dataset.pressTimer = String(timerId);
+    });
+  });
+
   wrap.querySelectorAll(".tema-checkbox").forEach(tcb => {
     tcb.addEventListener("change", () => {
       if (tcb.dataset.auto === "1") {
@@ -2826,6 +3369,25 @@ function showTemaSelectionScreen() {
       }
       syncBloqueToggleState(tcb.getAttribute("data-bloque"));
       updateSelectedCount();
+    });
+  });
+  wrap.querySelectorAll(".tema-line").forEach(line => {
+    line.addEventListener("click", ev => {
+      ev.preventDefault();
+      const cb = line.querySelector(".tema-checkbox");
+      if (!cb) return;
+      const prevTimer = Number(line.dataset.pressTimer || "0");
+      if (prevTimer) window.clearTimeout(prevTimer);
+      line.classList.remove("tema-press-flash");
+      void line.offsetWidth;
+      line.classList.add("tema-press-flash");
+      const timerId = window.setTimeout(() => {
+        line.classList.remove("tema-press-flash");
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event("change", { bubbles: true }));
+        delete line.dataset.pressTimer;
+      }, 130);
+      line.dataset.pressTimer = String(timerId);
     });
   });
   fuenteWrap.querySelectorAll(".fuente-btn").forEach(() => {});
@@ -2839,8 +3401,8 @@ function showTemaSelectionScreen() {
         lessUsedBtn.style.borderColor = "";
       } else {
         lessUsedBtn.className = "";
-        lessUsedBtn.style.background = "white";
-        lessUsedBtn.style.borderColor = "#b8d8ff";
+        lessUsedBtn.style.background = "var(--surface)";
+        lessUsedBtn.style.borderColor = "var(--border)";
       }
       if (lessUsedActive) {
         markAutoTemasForLessUsed();
@@ -2934,10 +3496,6 @@ function showTemaSelectionScreen() {
     const config = buildSelectionConfigFromUI();
     startTestWithConfig(config);
   };
-  document.getElementById("btn-start-practice-top").onclick = () => {
-    const config = buildSelectionConfigFromUI();
-    startTestWithConfig(config);
-  };
 
   updateSelectedCount();
   applyFuenteFilterToTemas();
@@ -2985,25 +3543,24 @@ function showTemaSelectionScreen() {
     document.getElementById("selected-count").innerHTML =
       `<strong>Preguntas seleccionadas:</strong> ${pool.length} / ${totalQuestions}`;
     updateBloqueCounts();
+    updateSelectionHighlights();
   }
 
   function updateTemaCountsForFuentes() {
     const fuenteSet = getActiveFuenteSet();
     wrap.querySelectorAll(".tema-checkbox").forEach(cb => {
       const temaKey = cb.getAttribute("data-tema-key");
-      const label = cb.closest("label");
+      const label = cb.closest(".tema-line");
       const countEl = label ? label.querySelector(".tema-count") : null;
       const list = temaToQuestions.get(temaKey) || [];
       let total = 0;
-      let seen = 0;
       for (const q of list) {
         const f = q.fuente || "Sin fuente";
         if (!fuenteSet.has(f)) continue;
         total += 1;
-        if ((stats[String(q.id)]?.seen || 0) > 0) seen += 1;
       }
       cb.setAttribute("data-total", String(total));
-      if (countEl) countEl.textContent = `${seen}/${total}`;
+      if (countEl) countEl.textContent = `${total}`;
     });
   }
 
@@ -3031,7 +3588,7 @@ function showTemaSelectionScreen() {
 
     wrap.querySelectorAll(".tema-checkbox").forEach(cb => {
       const temaKey = cb.getAttribute("data-tema-key");
-      const label = cb.closest("label");
+      const label = cb.closest(".tema-line");
       if (!label) return;
       if (fuenteSet.size === 0) {
         label.style.display = "none";
@@ -3044,6 +3601,25 @@ function showTemaSelectionScreen() {
     });
     updateTemaCountsForFuentes();
     updateBloqueCounts();
+    updateSelectionHighlights();
+  }
+
+  function updateSelectionHighlights() {
+    wrap.querySelectorAll(".bloque-card").forEach(card => card.classList.remove("is-active"));
+    wrap.querySelectorAll(".tema-line").forEach(line => line.classList.remove("is-active"));
+
+    wrap.querySelectorAll(".tema-checkbox").forEach(cb => {
+      const line = cb.closest(".tema-line");
+      if (line && cb.checked) line.classList.add("is-active");
+    });
+
+    wrap.querySelectorAll(".bloque-toggle").forEach(cb => {
+      const card = cb.closest(".bloque-card");
+      if (!card) return;
+      if (cb.checked && !cb.indeterminate) {
+        card.classList.add("is-active");
+      }
+    });
   }
 
   function getActiveFuenteSet() {
@@ -3093,10 +3669,8 @@ function showTemaSelectionScreen() {
     } else {
       perfectionBtn.className = "";
     }
-    const topBtn = document.getElementById("btn-start-practice-top");
     const bottomBtn = document.getElementById("btn-start-practice");
-    if (topBtn) topBtn.textContent = "Comenzar test";
-    if (bottomBtn) bottomBtn.textContent = "Comenzar test";
+    if (bottomBtn) bottomBtn.textContent = "Iniciar test";
   }
 }
 
@@ -3229,7 +3803,7 @@ function showExamMenu() {
   testMenu.innerHTML = `
     <h2>Modo examen</h2>
     <button id="btn-exam-full">Examen completo (100 preguntas / 100 min)</button>
-    <button id="btn-exam-by-block">Examen por bloque (25 preguntas / 25 min)</button>
+    <button id="btn-exam-by-block">Examen por bloque (20 preguntas / 20 min)</button>
     <button id="btn-back-main" class="secondary">Volver</button>
   `;
 
@@ -3240,47 +3814,101 @@ function showExamMenu() {
 
 function startExamFull() {
   mode = "exam";
-
-  // Agrupar por bloque y contar
-  const byBloque = new Map();
-  for (const q of questions) {
-    const b = q.bloque || "Sin bloque";
-    if (!byBloque.has(b)) byBloque.set(b, []);
-    byBloque.get(b).push(q);
+  const all = (questions || []).slice();
+  if (all.length < 100) {
+    showAlert("No hay suficientes preguntas para un examen completo (100).");
+    return;
   }
 
-  const bloques = Array.from(byBloque.entries()); // [ [bloque, qs], ... ]
-  const perBlock = 25;
+  const getTemaKey = (q) => {
+    const temaText = String(q?.tema || "").trim();
+    const m = temaText.match(/^(\d{1,3})\s*\./);
+    if (m) return `tema-${Number(m[1])}`;
+    return `tema-text-${normalizeTemaKey(temaText || String(q?.id || ""))}`;
+  };
+  const getBloqueKey = (q) => String(q?.bloque || "Sin bloque");
+
+  const byBloque = new Map();
+  const byTema = new Map();
+  for (const q of all) {
+    const bk = getBloqueKey(q);
+    if (!byBloque.has(bk)) byBloque.set(bk, []);
+    byBloque.get(bk).push(q);
+
+    const tk = getTemaKey(q);
+    if (!byTema.has(tk)) byTema.set(tk, []);
+    byTema.get(tk).push(q);
+  }
+
   let pool = [];
+  const usedIds = new Set();
+  const usedTemas = new Set();
+  const addIfNew = (q) => {
+    const id = String(q?.id ?? "");
+    if (!id || usedIds.has(id)) return false;
+    pool.push(q);
+    usedIds.add(id);
+    usedTemas.add(getTemaKey(q));
+    return true;
+  };
 
-  // Si hay 4+ bloques, elegimos los 4 con MÁS preguntas (no por orden alfabético)
-  if (bloques.length >= 4) {
-    const top4 = bloques
-      .sort((a, b) => b[1].length - a[1].length) // desc por tamaño
-      .slice(0, 4);
+  // 1) Asegurar representación de todos los bloques disponibles.
+  for (const qs of byBloque.values()) {
+    const copy = qs.slice();
+    shuffleArray(copy);
+    const picked = copy.find(q => !usedIds.has(String(q.id)));
+    if (picked) addIfNew(picked);
+  }
 
-    for (const [bloque, qs] of top4) {
+  // 2) Intentar 1 pregunta por tema (siempre que se pueda).
+  const temaKeys = Array.from(byTema.keys());
+  shuffleArray(temaKeys);
+  for (const tk of temaKeys) {
+    if (usedTemas.has(tk)) continue;
+    const copy = byTema.get(tk).slice();
+    shuffleArray(copy);
+    const picked = copy.find(q => !usedIds.has(String(q.id)));
+    if (picked) addIfNew(picked);
+  }
+
+  // 3) Rellenar aleatoriamente hasta 100 si faltan preguntas.
+  if (pool.length < 100) {
+    const rest = all.filter(q => !usedIds.has(String(q.id)));
+    shuffleArray(rest);
+    for (const q of rest) {
+      if (addIfNew(q) && pool.length >= 100) break;
+    }
+  }
+
+  // 4) Si sobran (más de 100 temas), recortar manteniendo bloques representados.
+  if (pool.length > 100) {
+    const byBloqueInPool = new Map();
+    for (const q of pool) {
+      const bk = getBloqueKey(q);
+      if (!byBloqueInPool.has(bk)) byBloqueInPool.set(bk, []);
+      byBloqueInPool.get(bk).push(q);
+    }
+    const keep = [];
+    const keepIds = new Set();
+    for (const qs of byBloqueInPool.values()) {
       const copy = qs.slice();
       shuffleArray(copy);
-      pool.push(...copy.slice(0, perBlock));
+      const picked = copy[0];
+      if (!picked) continue;
+      const id = String(picked.id);
+      if (keepIds.has(id)) continue;
+      keep.push(picked);
+      keepIds.add(id);
     }
-  } else {
-    // Si hay menos de 4 bloques, tiramos de todo
-    pool = [...questions];
-    shuffleArray(pool);
-    pool = pool.slice(0, 100);
-  }
-
-  // Rellenar hasta 100 con preguntas fuera de las ya usadas
-  if (pool.length < 100) {
-    const ids = new Set(pool.map(q => String(q.id)));
-    const rest = questions.filter(q => !ids.has(String(q.id)));
+    const rest = pool.filter(q => !keepIds.has(String(q.id)));
     shuffleArray(rest);
-    pool.push(...rest.slice(0, 100 - pool.length));
+    for (const q of rest) {
+      if (keep.length >= 100) break;
+      keep.push(q);
+      keepIds.add(String(q.id));
+    }
+    pool = keep.slice(0, 100);
   }
-
-  // Asegurar tamaño exacto
-  if (pool.length > 100) pool = pool.slice(0, 100);
 
   startSession(pool, {
     mode: "exam",
@@ -3290,14 +3918,31 @@ function startExamFull() {
   });
 }
 
+function startExamByBlock(bloqueName) {
+  const target = String(bloqueName || "").trim();
+  if (!target) return;
+  const qs = (questions || []).filter(q => (q.bloque || "Sin bloque") === target);
+  if (!qs.length) {
+    showAlert("No hay preguntas en ese bloque.");
+    return;
+  }
+  shuffleArray(qs);
+  const pool = qs.slice(0, 20);
+  startSession(pool, {
+    mode: "exam-block",
+    timeSeconds: 20 * 60,
+    countNonAnsweredAsWrongOnFinish: true,
+    meta: { bloque: target }
+  });
+}
+
 function showExamByBlockSelect() {
   showTestMenuScreen();
 
-  const bloques = [...new Set(questions.map(q => q.bloque || "Sin bloque"))]
-    .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
+  const bloques = getAvailableExamBlocks();
 
   testMenu.innerHTML = `
-    <h2>Examen por bloque (25 preguntas / 25 min)</h2>
+    <h2>Examen por bloque (20 preguntas / 20 min)</h2>
     <div id="block-list"></div>
     <button id="btn-back" class="secondary">Volver</button>
   `;
@@ -3306,17 +3951,7 @@ function showExamByBlockSelect() {
   bloques.forEach(b => {
     const btn = document.createElement("button");
     btn.textContent = b;
-    btn.onclick = () => {
-      const qs = questions.filter(q => (q.bloque || "Sin bloque") === b);
-      shuffleArray(qs);
-      const pool = qs.slice(0, 25);
-      startSession(pool, {
-        mode: "exam-block",
-        timeSeconds: 25 * 60,
-        countNonAnsweredAsWrongOnFinish: true,
-        meta: { bloque: b }
-      });
-    };
+    btn.onclick = () => startExamByBlock(b);
     list.appendChild(btn);
   });
 
@@ -3421,6 +4056,47 @@ function startQuickTest(numQuestions, minutes) {
   });
 }
 
+function startClockMode(minutes) {
+  if (!questions || questions.length === 0) {
+    showAlert("No hay preguntas cargadas.");
+    return;
+  }
+
+  const safeMinutes = Number(minutes) === 5 ? 5 : 1;
+  const pool = shuffleCopy(questions);
+  const modeKey = `clock-${safeMinutes}m`;
+  const recordTarget = getClockBest(modeKey);
+  mode = modeKey;
+
+  startSession(pool, {
+    mode: modeKey,
+    timeSeconds: safeMinutes * 60,
+    countNonAnsweredAsWrongOnFinish: false,
+    allowContinueOnTimeUp: false,
+    meta: { clock: true, minutes: safeMinutes, clockRecordTarget: recordTarget }
+  });
+}
+
+function startSurvivalMode() {
+  if (!questions || questions.length === 0) {
+    showAlert("No hay preguntas cargadas.");
+    return;
+  }
+
+  const pool = shuffleCopy(questions);
+  const modeKey = "survival";
+  const recordTarget = getClockBest(modeKey);
+  mode = modeKey;
+
+  startSession(pool, {
+    mode: modeKey,
+    timeSeconds: 0,
+    countNonAnsweredAsWrongOnFinish: false,
+    allowContinueOnTimeUp: false,
+    meta: { survival: true, clockRecordTarget: recordTarget }
+  });
+}
+
 function startSession(pool, opts) {
   // si empezamos sesión nueva, borramos pausado
   clearPausedTest();
@@ -3438,10 +4114,14 @@ function startSession(pool, opts) {
   const baseTestIds = currentTest.map(q => String(q.id));
   sessionOpts = {
     mode: opts.mode || mode,
-    timeSeconds: Math.max(0, opts.timeSeconds || (currentTest.length * 60)),
+    timeSeconds: Math.max(0, Number.isFinite(opts.timeSeconds) ? opts.timeSeconds : (currentTest.length * 60)),
+    allowContinueOnTimeUp: opts.allowContinueOnTimeUp !== false,
     countNonAnsweredAsWrongOnFinish: !!opts.countNonAnsweredAsWrongOnFinish,
     meta: { ...(opts.meta || {}), baseTestIds }
   };
+  clockModeRecordTarget = isArcadeModeValue(sessionOpts.mode)
+    ? Math.max(0, Number(sessionOpts?.meta?.clockRecordTarget) || 0)
+    : 0;
 
   timeRemaining = sessionOpts.timeSeconds;
   isOvertime = false;
@@ -3459,7 +4139,14 @@ function startSession(pool, opts) {
 
   showTestScreen();
   showQuestion();
-  startTimer();
+  if (sessionOpts.timeSeconds > 0) startTimer();
+  else {
+    stopTimer();
+    if (timerDisplay) {
+      timerDisplay.textContent = "";
+      updateTimerStyle();
+    }
+  }
 }
 
 // =======================
@@ -3473,10 +4160,17 @@ function renderQuestionWithOptions(q, opcionesOrdenadas) {
     answerExplanation.style.display = "none";
   }
 
+  const isSurvivalMode = isSurvivalModeValue();
   noSeBtn.style.display = "inline-block";
-  noSeBtn.disabled = false;
   noSeBtn.textContent = "No lo sé";
-  noSeBtn.onclick = onNoSe;
+  noSeBtn.classList.toggle("is-mode-disabled", isSurvivalMode);
+  if (isSurvivalMode) {
+    noSeBtn.disabled = true;
+    noSeBtn.onclick = null;
+  } else {
+    noSeBtn.disabled = false;
+    noSeBtn.onclick = onNoSe;
+  }
 
   if (continueBtn) {
     continueBtn.style.display = "none";
@@ -3490,7 +4184,7 @@ function renderQuestionWithOptions(q, opcionesOrdenadas) {
     const btn = document.createElement("button");
     const letter = letters[idx] || String(idx + 1);
     btn.innerHTML = `
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid #b8d8ff;border-radius:6px;margin-right:8px;font-weight:700;">${letter}</span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:6px;margin-right:8px;font-weight:700;">${letter}</span>
       <span style="text-align:left;flex:1;">${escapeHtml(opt)}</span>
     `;
     btn.className = "answer-btn";
@@ -3585,10 +4279,16 @@ function checkAnswer(selectedText, q) {
   lastSessionAnswers.push(
     buildAnswerRecord(q, selectedText, correctText, isCorrect ? "ACIERTO" : "FALLO")
   );
+  updateTestTopUiForMode();
+  if (isSurvivalModeValue() && !isCorrect) {
+    finishTest("survival-fail");
+    return;
+  }
   showAnswer(q, selectedText);
 }
 
 function onNoSe() {
+  if (isSurvivalModeValue()) return;
   ttsUserInteracted = true;
   const q = currentTest[currentIndex];
   const idStr = String(q.id);
@@ -3606,6 +4306,7 @@ function onNoSe() {
 
   const correctText = q.opciones[q.respuesta_correcta];
   lastSessionAnswers.push(buildAnswerRecord(q, null, correctText, "NOSE"));
+  updateTestTopUiForMode();
 
   if (mode === "perfection") {
     if (!perfectionSet.has(idStr)) {
@@ -3622,16 +4323,23 @@ function onNoSe() {
 }
 
 function showAnswer(q, selectedTextOrNull) {
-  stopTimer();
   ttsStop();
 
   viewState = "feedback";
   lastSelectedText = selectedTextOrNull;
   lastCorrectText = q.opciones[q.respuesta_correcta];
 
+  const isSurvivalMode = isSurvivalModeValue();
   noSeBtn.style.display = "inline-block";
-  noSeBtn.disabled = false;
-  noSeBtn.textContent = "Continuar";
+  noSeBtn.classList.toggle("is-mode-disabled", isSurvivalMode);
+  if (isSurvivalMode) {
+    noSeBtn.disabled = true;
+    noSeBtn.textContent = "No lo sé";
+    noSeBtn.onclick = null;
+  } else {
+    noSeBtn.disabled = false;
+    noSeBtn.textContent = "Continuar";
+  }
 
   const correctText = q.opciones[q.respuesta_correcta];
   const buttons = answersContainer.querySelectorAll(".answer-btn");
@@ -3647,7 +4355,7 @@ function showAnswer(q, selectedTextOrNull) {
 
   const exp = document.createElement("p");
   exp.style.margin = "0";
-  exp.textContent = q.explicacion || "";
+  exp.textContent = buildExplanationText(q);
   if (answerExplanation) {
     answerExplanation.innerHTML = "";
     answerExplanation.appendChild(exp);
@@ -3669,13 +4377,12 @@ function showAnswer(q, selectedTextOrNull) {
     currentIndex++;
     viewState = "question";
     showQuestion();
-    startTimer();
   };
   if (continueBtn) {
     continueBtn.style.display = "none";
     continueBtn.onclick = continueFromFeedback;
   }
-  noSeBtn.onclick = continueFromFeedback;
+  if (!isSurvivalMode) noSeBtn.onclick = continueFromFeedback;
 
   buttons.forEach(btn => {
     btn.onclick = continueFromFeedback;
@@ -3745,6 +4452,12 @@ function isResultsVisible() {
 async function handleTimeUp() {
   if (isResultsVisible()) return;
   if (timeUpPromptOpen) return;
+
+  if (sessionOpts?.allowContinueOnTimeUp === false) {
+    finishTest("time");
+    return;
+  }
+
   timeUpPromptOpen = true;
 
   const choice = await openModal({
@@ -3802,13 +4515,25 @@ function finishTest(reason = "manual") {
   const useCounts = mode === "perfection"
     ? { correct: baseCounts.correct, wrong: baseCounts.wrong, noSe: baseCounts.noSe }
     : { correct: correctCount, wrong: wrongCount, noSe: noSeCount };
+  const currentModeKey = sessionOpts?.mode || mode;
+  const isArcadeMode = isArcadeModeValue(currentModeKey);
+  const isSurvivalMode = isSurvivalModeValue(currentModeKey);
+  const previousArcadeBest = isArcadeMode ? getClockBest(mode) : 0;
+  const isDarkTheme = document.body.classList.contains("chatgpt-dark") || document.body.classList.contains("chari-dark");
   const nTotal = correctCount + wrongCount + noSeCount;
   const scoreBruta = calcBruta(useCounts.correct, useCounts.wrong);
   const score100 = calcNotaSobre100(useCounts.correct, useCounts.wrong, useCounts.noSe);
   const baseTotal = sessionOpts?.meta?.baseTestIds?.length || currentTest.length;
   const maxBruta = mode === "perfection" ? baseTotal : currentTest.length;
   const baseTime = Math.max(0, sessionOpts?.timeSeconds || 0);
+  const elapsedUsedSec = (() => {
+    if (isOvertime) return baseTime + Math.max(0, overtimeSeconds || 0);
+    return Math.max(0, baseTime - Math.max(0, timeRemaining || 0));
+  })();
+  const answeredForSpeed = useCounts.correct + useCounts.wrong + useCounts.noSe;
+  const avgSpeedSec = answeredForSpeed > 0 ? (elapsedUsedSec / answeredForSpeed) : 0;
   const timeTotalLabel = formatTime(baseTime);
+  const hasTimedSession = baseTime > 0 || isOvertime;
   const timeRestLabel = (() => {
     if (isOvertime) {
       const totalUsed = baseTime + Math.max(0, overtimeSeconds || 0);
@@ -3826,42 +4551,62 @@ function finishTest(reason = "manual") {
     noSe: useCounts.noSe,
     scoreBruta,
     score100,
+    timeUsedSec: elapsedUsedSec,
+    avgSpeedSec,
     reason,
     finished: true
   });
 
   clearPausedTest();
   showResultsScreen();
+  if (resultsContainer) {
+    resultsContainer.classList.toggle("is-arcade-results", isArcadeMode);
+  }
 
-  const passLabel = score100 >= 50
-    ? `<p style="color:#2e8b57;font-weight:700;font-size:32px;">¡Aprobado!</p>`
-    : `<p style="color:#d9534f;font-weight:700;font-size:32px;">Suspendido...</p>`;
+  const isNewArcadeRecord = isArcadeMode && useCounts.correct > previousArcadeBest;
+  const clockRecordLine = isArcadeMode
+    ? (
+      isNewArcadeRecord
+        ? `<p style="color:var(--accent-success);font-weight:700;">¡Es un nuevo récord!</p>`
+        : `<p style="color:${isDarkTheme ? "var(--text)" : "#000"};font-weight:600;">Récord: ${Math.max(previousArcadeBest, useCounts.correct)}</p>`
+    )
+    : "";
+  const passLabel = isArcadeMode
+    ? `<p style="color:var(--home-accent);font-weight:700;font-size:40px;line-height:1.1;">🔥 ${useCounts.correct} 🔥</p>`
+    : (score100 >= 50
+      ? `<p style="color:var(--accent-success);font-weight:700;font-size:32px;">¡Aprobado!</p>`
+      : `<p style="color:var(--accent-danger);font-weight:700;font-size:32px;">Suspendido...</p>`);
+  const aciertosLine = `<p><strong>Aciertos:</strong> ${correctCount}</p>`;
 
   resultsText.innerHTML = `
-    <div style="height:8px;"></div>
-    ${passLabel}
-    <p><strong>Nota:</strong> ${score100.toFixed(1)}/100</p>
-    <p><strong>Puntuación bruta:</strong> ${format1Comma(scoreBruta)}/${maxBruta}</p>
-    <div style="height:8px;"></div>
-    <p><strong>Aciertos:</strong> ${correctCount}</p>
-    <p><strong>Fallos:</strong> ${wrongCount}</p>
-    <p><strong>No lo sé:</strong> ${noSeCount}</p>
-    <div style="height:8px;"></div>
-    <p><strong>Total preguntas:</strong> ${nTotal}</p>
-    <p><strong>Tiempo restante:</strong> ${timeRestLabel}</p>
+    <div class="${isArcadeMode ? "arcade-results-stack" : ""}">
+      ${isArcadeMode ? `<h2 class="arcade-results-title">Resultados</h2>` : ""}
+      <div style="height:8px;"></div>
+      ${passLabel}
+      ${isArcadeMode ? `<div class="arcade-score-meta">${aciertosLine}${clockRecordLine}</div>` : clockRecordLine}
+      ${isArcadeMode ? "" : `<p><strong>Nota:</strong> ${score100.toFixed(1)}/100</p>`}
+      ${isArcadeMode ? "" : `<p><strong>Puntuación bruta:</strong> ${format1Comma(scoreBruta)}/${maxBruta}</p>`}
+      <div style="height:8px;"></div>
+      ${isArcadeMode ? "" : aciertosLine}
+      ${isSurvivalMode ? "" : `<p><strong>Fallos:</strong> ${wrongCount}</p>`}
+      ${isSurvivalMode ? "" : `<p><strong>No lo sé:</strong> ${noSeCount}</p>`}
+      <div style="height:8px;"></div>
+      ${isArcadeMode ? "" : `<p><strong>Total preguntas:</strong> ${nTotal}</p>`}
+      ${hasTimedSession && !isArcadeMode ? `<p><strong>Tiempo restante:</strong> ${timeRestLabel}</p>` : ""}
+      ${hasTimedSession && !isSurvivalMode ? `<p><strong>Velocidad media:</strong> ${formatSpeedTime(avgSpeedSec)}</p>` : ""}
+    </div>
   `;
   const resultsActionsBottom = document.getElementById("results-actions-bottom");
   if (resultsActionsBottom) {
     resultsActionsBottom.innerHTML = `
-      <button id="btn-copy-test-text">Copiar test en portapapeles</button>
-      <button id="btn-repeat-test">Repetir test</button>
+      ${isArcadeMode ? "" : `<button id="btn-repeat-test">Repetir test</button>`}
       <button id="btn-review-test">Repasar test</button>
     `;
     resultsActionsBottom.appendChild(backToMenuBtnResults);
   }
 
-  document.getElementById("btn-copy-test-text").onclick = () => exportLastTestText("copy");
-  document.getElementById("btn-repeat-test").onclick = () => repeatLastTest();
+  const repeatBtn = document.getElementById("btn-repeat-test");
+  if (repeatBtn) repeatBtn.onclick = () => repeatLastTest();
   document.getElementById("btn-review-test").onclick = () => showReviewScreen();
 
   backToMenuBtnResults.onclick = showMainMenu;
@@ -4183,7 +4928,7 @@ function showQuestionBank() {
     </div>
 
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;">
-      <input id="bank-search" type="text" placeholder="Buscar texto..." style="flex:1;max-width:520px;padding:8px;border-radius:10px;border:1px solid #b8d8ff;">
+      <input id="bank-search" type="text" placeholder="Buscar texto..." style="flex:1;max-width:520px;padding:8px;border-radius:10px;border:1px solid var(--border);">
       <button id="bank-back" class="secondary">Volver</button>
     </div>
 
@@ -4320,7 +5065,7 @@ function openEditQuestionModal(id) {
   overlay.style.top = "0";
   overlay.style.right = "0";
   overlay.style.bottom = "0";
-  overlay.style.background = "rgba(0,0,0,0.5)";
+  overlay.style.background = "var(--overlay-scrim)";
   overlay.style.display = "flex";
   overlay.style.alignItems = "center";
   overlay.style.justifyContent = "center";
@@ -4328,7 +5073,7 @@ function openEditQuestionModal(id) {
   overlay.style.zIndex = "9999";
 
   const card = document.createElement("div");
-  card.style.background = "#fff";
+  card.style.background = "var(--surface)";
   card.style.width = "100%";
   card.style.maxWidth = "720px";
   card.style.borderRadius = "14px";
@@ -4341,39 +5086,39 @@ function openEditQuestionModal(id) {
   card.innerHTML = `
     <h3>Editar pregunta #${escapeHtml(idStr)}</h3>
     <label style="display:block;margin:8px 0;">Tema:
-      <input id="edit-tema" style="width:100%;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.tema || "")}">
+      <input id="edit-tema" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.tema || "")}">
     </label>
     <label style="display:block;margin:8px 0;">Bloque:
-      <input id="edit-bloque" style="width:100%;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.bloque || "")}">
+      <input id="edit-bloque" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.bloque || "")}">
     </label>
     <label style="display:block;margin:8px 0;">Fuente:
-      <input id="edit-fuente" style="width:100%;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.fuente || "")}">
+      <input id="edit-fuente" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.fuente || "")}">
     </label>
     <label style="display:block;margin:8px 0;">Modelo (A/B o vacío):
-      <input id="edit-modelo" style="width:120px;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.modelo || "")}">
+      <input id="edit-modelo" style="width:120px;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.modelo || "")}">
     </label>
     <label style="display:block;margin:8px 0;">Pregunta:
-      <textarea id="edit-pregunta" style="width:100%;padding:8px;min-height:70px;border-radius:10px;border:1px solid #b8d8ff;"></textarea>
+      <textarea id="edit-pregunta" style="width:100%;padding:8px;min-height:70px;border-radius:10px;border:1px solid var(--border);"></textarea>
     </label>
     <label style="display:block;margin:8px 0;">A)
-      <input id="edit-a" style="width:100%;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.opciones?.[0] ?? "")}">
+      <input id="edit-a" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.opciones?.[0] ?? "")}">
     </label>
     <label style="display:block;margin:8px 0;">B)
-      <input id="edit-b" style="width:100%;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.opciones?.[1] ?? "")}">
+      <input id="edit-b" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.opciones?.[1] ?? "")}">
     </label>
     <label style="display:block;margin:8px 0;">C)
-      <input id="edit-c" style="width:100%;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.opciones?.[2] ?? "")}">
+      <input id="edit-c" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.opciones?.[2] ?? "")}">
     </label>
     <label style="display:block;margin:8px 0;">D)
-      <input id="edit-d" style="width:100%;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(q.opciones?.[3] ?? "")}">
+      <input id="edit-d" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.opciones?.[3] ?? "")}">
     </label>
 
     <label style="display:block;margin:8px 0;">Correcta (A/B/C/D):
-      <input id="edit-correcta" style="width:120px;padding:8px;border-radius:10px;border:1px solid #b8d8ff;" value="${escapeHtmlAttr(correctLetter)}">
+      <input id="edit-correcta" style="width:120px;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(correctLetter)}">
     </label>
 
     <label style="display:block;margin:8px 0;">Explicación:
-      <textarea id="edit-exp" style="width:100%;padding:8px;min-height:70px;border-radius:10px;border:1px solid #b8d8ff;"></textarea>
+      <textarea id="edit-exp" style="width:100%;padding:8px;min-height:70px;border-radius:10px;border:1px solid var(--border);"></textarea>
     </label>
 
     <div class="row" style="margin-top:10px;">
@@ -4781,6 +5526,16 @@ function ensureDarkModeStyleTag() {
       color: #e6eaf0;
     }
 
+    /* Mantener color del logo TESTA+ en home */
+    body.chatgpt-dark #main-menu h1 .logo-test {
+      color: var(--home-title) !important;
+    }
+    body.chatgpt-dark #main-menu h1 .logo-aplus,
+    body.chatgpt-dark #main-menu h1 .logo-aplus .logo-a,
+    body.chatgpt-dark #main-menu h1 .logo-aplus .logo-plus {
+      color: var(--home-accent) !important;
+    }
+
     body.chatgpt-dark hr {
       border-color: rgba(255,255,255,0.12);
     }
@@ -4818,31 +5573,27 @@ function ensureDarkModeStyleTag() {
       color: rgba(230,234,240,0.6) !important;
     }
 
-    /* Botones genéricos */
+    /* Botones: unificados con la paleta de variables del tema oscuro */
     body.chatgpt-dark button {
-      background: rgba(255,255,255,0.10);
-      color: #e6eaf0;
-      border: 1px solid rgba(255,255,255,0.14);
+      background: var(--surface) !important;
+      color: var(--text) !important;
+      border: 1px solid var(--border) !important;
     }
 
     body.chatgpt-dark button:hover {
-      filter: brightness(1.08);
+      filter: brightness(1.05);
     }
 
-    /* Clases existentes */
-    body.chatgpt-dark button.secondary {
-      background: rgba(120,170,255,0.18);
-      border-color: rgba(120,170,255,0.30);
-    }
-
+    body.chatgpt-dark button.secondary,
     body.chatgpt-dark button.success {
-      background: rgba(120,170,255,0.18);
-      border-color: rgba(120,170,255,0.30);
+      background: var(--brand-soft) !important;
+      border-color: color-mix(in srgb, var(--brand) 40%, var(--border)) !important;
     }
 
     body.chatgpt-dark button.danger {
-      background: rgba(255,90,90,0.18);
-      border-color: rgba(255,90,90,0.35);
+      background: var(--error-soft) !important;
+      border-color: var(--error-border) !important;
+      color: var(--text) !important;
     }
 
     body.chatgpt-dark .answer-btn.is-correct {
@@ -4852,20 +5603,15 @@ function ensureDarkModeStyleTag() {
       background: rgba(190, 90, 90, 0.28) !important;
     }
 
-    body.chatgpt-dark #no-btn {
-      background: rgba(255,255,255,0.10) !important;
-      border: 1px solid rgba(255,255,255,0.14) !important;
-    }
-
     body.chatgpt-dark .modal-overlay {
       background: rgba(4, 8, 18, 0.68) !important;
     }
 
     body.chatgpt-dark .modal {
-      background: #161f31 !important;
-      border: 1px solid rgba(125, 152, 210, 0.36) !important;
+      background: var(--surface-soft) !important;
+      border: 1px solid var(--border) !important;
       box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45) !important;
-      color: #e6eaf0 !important;
+      color: var(--text) !important;
     }
 
     body.chatgpt-dark .modal-title,
@@ -4874,12 +5620,6 @@ function ensureDarkModeStyleTag() {
     body.chatgpt-dark .modal span,
     body.chatgpt-dark .modal div,
     body.chatgpt-dark .modal label {
-      color: #e6eaf0 !important;
-    }
-
-    body.chatgpt-dark .modal button {
-      background: rgba(96, 140, 224, 0.24) !important;
-      border-color: rgba(132, 168, 235, 0.42) !important;
       color: #e6eaf0 !important;
     }
 
@@ -4907,30 +5647,12 @@ function applyDarkModeToDocument() {
 }
 
 function injectDarkModeToggleIntoMainMenu() {
-  const row = document.getElementById("main-darkmode-row");
-  if (!row) return;
-  row.innerHTML = "";
-
-  const wrap = document.createElement("div");
-  wrap.className = "home-dark-toggle";
-  wrap.innerHTML = `
-    <div class="home-dark-left">
-      <span class="home-dark-icon" aria-hidden="true">◐</span>
-      <span class="home-dark-label">Modo oscuro</span>
-    </div>
-    <button id="btn-darkmode-toggle" type="button" class="home-switch" role="switch" aria-checked="false">
-      <span class="home-switch-thumb" aria-hidden="true"></span>
-    </button>
-  `;
-  row.appendChild(wrap);
-
-  const btn = wrap.querySelector("#btn-darkmode-toggle");
+  const btn = document.getElementById("home-btn-darkmode");
   if (!btn) return;
 
   const sync = () => {
     const enabled = isDarkModeEnabled();
-    btn.classList.toggle("is-on", enabled);
-    btn.setAttribute("aria-checked", String(enabled));
+    btn.setAttribute("aria-pressed", String(enabled));
     btn.setAttribute("aria-label", enabled ? "Desactivar modo oscuro" : "Activar modo oscuro");
   };
 
@@ -5066,6 +5788,11 @@ function cssEscape(val) {
     if (viewState === "feedback") {
       if (key === "enter" || key === " ") {
         e.preventDefault();
+        if (isSurvivalModeValue()) {
+          const firstAnswerBtn = answersContainer ? answersContainer.querySelector(".answer-btn") : null;
+          if (firstAnswerBtn instanceof HTMLElement) firstAnswerBtn.click();
+          return;
+        }
         if (noSeBtn) noSeBtn.click();
       }
     }

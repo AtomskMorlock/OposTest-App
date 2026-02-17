@@ -6,18 +6,18 @@
   <title>Tests para Facultativo de bibliotecas del estado</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <style>
-    body { font-family: Arial, sans-serif; padding: 12px 10px 12px; background: #f0f8ff; min-height: 100vh; min-height: 100dvh; }
+    body { font-family: Arial, sans-serif; padding: 12px 10px 12px; background: var(--bg); min-height: 100vh; min-height: 100dvh; }
     h1, h2, h3, h4 { margin: 10px 0; }
-    #main-menu h1 { color: #3c7bd6; font-family: "Trebuchet MS", "Verdana", "Arial", sans-serif; }
-    button { display: block; margin: 10px 0; padding: 10px; width: 280px; cursor: pointer; border-radius: 10px; border: 1px solid #b8d8ff; background: white; }
+    #main-menu h1 { color: var(--brand); font-family: "Trebuchet MS", "Verdana", "Arial", sans-serif; }
+    button { display: block; margin: 10px 0; padding: 10px; width: 280px; cursor: pointer; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
     button:hover { filter: brightness(0.98); }
-    .secondary { background: #e8f3ff; }
-    #tts-read { background: #ffffff; }
-    #tts-read.tts-active { background: #e8f3ff; }
-    .success { background: #e8f3ff; border-color: #b8d8ff; }
-    .danger { background: #ffe8e8; border-color: #ffb3b3; }
+    .secondary { background: var(--brand-soft); }
+    #tts-read { background: var(--surface); }
+    #tts-read.tts-active { background: var(--brand-soft); }
+    .success { background: var(--brand-soft); border-color: var(--border); }
+    .danger { background: var(--error-soft); border-color: var(--error-border); }
     .row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .card { background: white; border: 1px solid #d7e6ff; border-radius: 14px; padding: 14px; margin: 12px 0; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin: 12px 0; }
     #main-menu { margin-top: 6px; }
     #main-menu { text-align: center; min-height: calc(100vh - 24px); min-height: calc(100dvh - 24px); height: calc(100vh - 24px); height: calc(100dvh - 24px); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100%; box-sizing: border-box; gap: 0; }
     #main-menu .row { justify-content: center; }
@@ -37,15 +37,15 @@
     #test-top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
     #test-progress { text-align: center; flex: 1; display: flex; justify-content: center; }
     #timer { font-weight: bold; min-width: 70px; text-align: left; }
-    #timer.timer-warn { color: #d9a404; }
-    #timer.timer-danger { color: #d9534f; }
+    #timer.timer-warn { color: var(--timer-warn); }
+    #timer.timer-danger { color: var(--accent-danger); }
     #timer.timer-blink { animation: timer-blink 1s steps(2, start) infinite; }
     @keyframes timer-blink {
       50% { opacity: 0.2; }
     }
     #mode-pill { display: none; }
-    #test-progress .progress-bar { width: min(420px, 70vw); height: 10px; background: #e6eefc; border-radius: 999px; overflow: hidden; }
-    #test-progress .progress-bar-fill { height: 100%; background: #6aa9ff; width: 0%; }
+    #test-progress .progress-bar { width: min(420px, 70vw); height: 10px; background: var(--progress-track); border-radius: 999px; overflow: hidden; }
+    #test-progress .progress-bar-fill { height: 100%; background: var(--progress-fill); width: 0%; }
     #progress-text { min-width: 70px; text-align: right; font-weight: bold; }
     #test-controls-row { flex-wrap: nowrap; justify-content: center; align-items: center; gap: 8px; }
     #test-controls-row #no-btn,
@@ -59,36 +59,22 @@
       font-size: 16px !important;
     }
     #test-controls-row #no-btn,
-    #test-controls-row #pause-btn { background: white; }
-    #test-controls-row #tts-read {
-      flex: 0 0 44px;
-      width: 44px !important;
-      height: 44px !important;
-      min-width: 44px;
-      min-height: 44px;
-      margin: 0 !important;
-      padding: 0 !important;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    #test-controls-row #tts-read > span:not(.tts-read-icon) { display: none; }
-    #test-controls-row #tts-read .tts-read-icon { font-size: 18px; }
+    #test-controls-row #pause-btn { background: var(--surface); }
     #results-container { text-align: center; }
     #results-container { position: relative; min-height: calc(100vh - 24px); min-height: calc(100dvh - 24px); height: calc(100vh - 24px); height: calc(100dvh - 24px); padding-bottom: 140px; }
     #results-actions-bottom { position: absolute; left: 0; right: 0; bottom: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .answer-btn { width: 280px; font-size: 16px; }
-    #no-btn { background: white; }
+    #no-btn { background: var(--surface); }
     .numq-btn, .time-btn { width: 70px; }
-    .secondary.numq-btn, .secondary.time-btn, .secondary.fuente-btn { background: white; }
+    .secondary.numq-btn, .secondary.time-btn, .secondary.fuente-btn { background: var(--surface); }
     #test-menu .fuente-btn { width: 160px; }
-    textarea { width: 100%; box-sizing: border-box; border-radius: 10px; border: 1px solid #b8d8ff; padding: 10px; }
+    textarea { width: 100%; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--border); padding: 10px; }
     label { cursor: pointer; }
-    hr { border: 0; border-top: 1px solid #e6eefc; margin: 12px 0; }
-    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background:#e8f3ff; border:1px solid #b8d8ff; font-size: 12px; }
+    hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background:var(--brand-soft); border:1px solid var(--border); font-size: 12px; }
     .small { font-size: 12px; opacity: 0.85; }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(10, 20, 35, 0.35); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
-    .modal { width: min(92vw, 420px); background: #ffffff; border: 1px solid #d7e6ff; border-radius: 14px; padding: 16px; box-shadow: 0 10px 30px rgba(15, 35, 70, 0.15); }
+    .modal-overlay { position: fixed; inset: 0; background: var(--overlay-scrim); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
+    .modal { width: min(92vw, 420px); background: var(--brand-soft); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: var(--shadow-1); }
     .modal-title { font-weight: 700; margin-bottom: 8px; }
     .modal-message { white-space: pre-wrap; margin-bottom: 12px; }
     .modal-actions { justify-content: center; }
@@ -96,7 +82,7 @@
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
     .stats-card { display: flex; flex-direction: column; gap: 6px; position: relative; padding-right: 190px; }
     .stats-circle { position: absolute; right: 16px; bottom: 16px; display: flex; align-items: center; justify-content: center; margin: 0; }
-    .review-item { background: white; border: 1px solid #d7e6ff; border-radius: 14px; padding: 14px; margin: 12px 0; text-align: left; }
+    .review-item { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin: 12px 0; text-align: left; }
 
     @media (max-width: 700px) {
       body { padding: 6px; }
@@ -138,7 +124,7 @@
       #test-container { display: flex; flex-direction: column; height: calc(100dvh - 24px); position: relative; padding-bottom: 0; }
       #test-bottom { position: absolute; left: 0; right: 0; bottom: 6px; padding-bottom: 6px; }
       #test-bottom { padding-left: 6px; padding-right: 6px; }
-    #answer-explanation { max-height: 120px; overflow: auto; }
+    #answer-explanation { max-height: none; overflow: visible; }
       #test-controls-row { gap: 6px; }
       #results-container { height: calc(100dvh - 24px); position: relative; padding-bottom: 0; }
       #results-actions-bottom { position: absolute; left: 0; right: 0; bottom: 8px; gap: 6px; padding-left: 6px; padding-right: 6px; }
@@ -151,7 +137,7 @@
       #stats-actions button { width: 100%; max-width: 100%; }
     }
   </style>
-  <link rel="stylesheet" href="styles.css?v=20260215">
+  <link rel="stylesheet" href="styles.css?v=20260217">
 </head>
 <body>
 
@@ -248,8 +234,10 @@
   </div>
   <div class="small" id="mode-pill" style="display:none;"></div>
 
-  <div id="question-text" style="margin:10px 0; font-weight:600;"></div>
-  <div id="answer-explanation" class="small" style="display:none;margin:6px 0;opacity:0.95;background:#fff6cc;border:1px solid #f1dda4;border-radius:10px;padding:8px;align-items:center;"></div>
+  <div id="test-content-scroll">
+    <div id="question-text" style="margin:10px 0; font-weight:600;"></div>
+    <div id="answer-explanation" class="small" style="display:none;margin:6px 0;opacity:0.95;background:var(--warning-soft);border:1px solid var(--warning-border);border-radius:10px;padding:8px;align-items:center;"></div>
+  </div>
   <div id="test-bottom">
     <div id="answers-container"></div>
 
@@ -260,7 +248,6 @@
     <hr>
     <div class="row" id="test-controls-row">
       <button id="no-btn" class="secondary">No lo sé</button>
-      <button id="tts-read" class="secondary" aria-label="Leer pregunta y opciones"><span class="tts-read-icon" aria-hidden="true">🔊</span></button>
     </div>
   </div>
 </div>
