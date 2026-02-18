@@ -293,7 +293,7 @@ body.is-home-screen {
 body.is-home-screen .stars {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 0;
   pointer-events: none;
   opacity: 0.32;
   background-image:
@@ -303,6 +303,25 @@ body.is-home-screen .stars {
   background-size: 240px 240px, 320px 320px, 420px 420px;
   background-position: 0 0, 40px 120px, 180px 60px;
   animation: drift 90s linear infinite;
+}
+
+body.is-home-screen #main-menu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 860ms ease;
+  background:
+    radial-gradient(110% 85% at 50% -18%, rgba(172, 147, 255, 0.40), rgba(126, 112, 216, 0.12) 56%, rgba(17, 12, 59, 0) 80%),
+    linear-gradient(180deg, #221b5f 0%, #2c2773 44%, #1f1b57 74%, #14103d 100%);
+}
+
+body.splash-active.is-home-screen #main-menu::before,
+body.splash-shared-logo.is-home-screen #main-menu::before,
+body.splash-handoff.is-home-screen #main-menu::before {
+  opacity: 1;
 }
 
 body.chatgpt-dark.is-home-screen,
@@ -340,6 +359,310 @@ body.chari-dark.is-home-screen {
 body.chatgpt-dark.is-home-screen .stars,
 body.chari-dark.is-home-screen .stars {
   opacity: 0.42;
+}
+
+body.splash-active {
+  overflow: hidden !important;
+}
+
+#app-splash {
+  --app-splash-ascent-x: 0px;
+  --app-splash-ascent-y: -25vh;
+  --app-splash-ascent-scale: 0.86;
+  --app-splash-hide-fade-ms: 820ms;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  box-sizing: border-box;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity var(--app-splash-hide-fade-ms) ease, visibility var(--app-splash-hide-fade-ms) ease;
+  background:
+    radial-gradient(110% 85% at 50% -18%, rgba(172, 147, 255, 0.46), rgba(126, 112, 216, 0.12) 56%, rgba(17, 12, 59, 0) 80%),
+    linear-gradient(180deg, #221b5f 0%, #2c2773 44%, #1f1b57 74%, #14103d 100%);
+}
+
+#app-splash.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#app-splash .app-splash-stars {
+  position: absolute;
+  inset: -10% -6%;
+  opacity: 0;
+  transform: translateY(10px) scale(1.03);
+  transition: opacity 520ms ease, transform 1200ms cubic-bezier(0.22, 1, 0.36, 1);
+  background:
+    radial-gradient(circle at 10% 14%, rgba(255, 255, 255, 0.88) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 24% 10%, rgba(255, 255, 255, 0.76) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 36% 18%, rgba(255, 255, 255, 0.72) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 49% 9%, rgba(255, 255, 255, 0.84) 0 1.1px, transparent 2px),
+    radial-gradient(circle at 61% 16%, rgba(255, 255, 255, 0.7) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 75% 8%, rgba(255, 255, 255, 0.86) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 86% 15%, rgba(255, 255, 255, 0.74) 0 1px, transparent 1.9px),
+    radial-gradient(circle at 93% 11%, rgba(255, 255, 255, 0.68) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 14% 28%, rgba(255, 255, 255, 0.62) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 27% 34%, rgba(255, 255, 255, 0.6) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 42% 30%, rgba(255, 255, 255, 0.58) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 58% 36%, rgba(255, 255, 255, 0.56) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 71% 31%, rgba(255, 255, 255, 0.62) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 85% 36%, rgba(255, 255, 255, 0.58) 0 0.9px, transparent 1.8px),
+    radial-gradient(circle at 6% 46%, rgba(255, 255, 255, 0.56) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 20% 52%, rgba(255, 255, 255, 0.5) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 35% 48%, rgba(255, 255, 255, 0.54) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 50% 54%, rgba(255, 255, 255, 0.52) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 65% 50%, rgba(255, 255, 255, 0.5) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 80% 55%, rgba(255, 255, 255, 0.56) 0 0.8px, transparent 1.7px),
+    radial-gradient(circle at 92% 49%, rgba(255, 255, 255, 0.48) 0 0.8px, transparent 1.7px);
+}
+
+#app-splash.is-started .app-splash-stars {
+  opacity: 0.88;
+  transform: translateY(0) scale(1);
+}
+
+#app-splash.is-ascending .app-splash-stars {
+  transform: translateY(11vh) scale(1.1);
+}
+
+#app-splash .app-splash-core {
+  width: min(92vw, 760px);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+#app-splash .app-splash-stage {
+  min-height: 54vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#app-splash .app-splash-logo-line {
+  margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.01em;
+  font-family: "Segoe Print", "Bradley Hand", "Marker Felt", "Brush Script MT", cursive;
+  font-size: clamp(3.3rem, 13vw, 6.9rem);
+  line-height: 0.9;
+  text-shadow: 0 2px 12px rgba(10, 8, 34, 0.56);
+  white-space: nowrap;
+  transform: translateY(0) scale(1);
+  transition: transform 1100ms cubic-bezier(0.18, 0.95, 0.2, 1);
+}
+
+#app-splash .app-splash-home-logo {
+  width: 100%;
+  text-align: center;
+}
+
+#app-splash.is-ascending .app-splash-logo-line {
+  transform: translate3d(var(--app-splash-ascent-x), var(--app-splash-ascent-y), 0) scale(var(--app-splash-ascent-scale));
+}
+
+#app-splash .app-splash-test {
+  color: #f4f7ff;
+  font-family: "Trebuchet MS", "Verdana", "Arial", sans-serif;
+  font-size: calc(1em - 2px);
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(-34px) scale(1.24);
+}
+
+#app-splash.is-started .app-splash-test {
+  animation: splashTestImpact 640ms cubic-bezier(0.18, 0.9, 0.24, 1.1) 700ms forwards;
+}
+
+#app-splash .app-splash-logo-line .logo-test {
+  color: #f4f7ff;
+  font-family: "Trebuchet MS", "Verdana", "Arial", sans-serif;
+  font-size: calc(1em - 2px);
+}
+
+#app-splash .app-splash-logo-line .logo-aplus {
+  color: #ff5f70;
+}
+
+#app-splash .app-splash-logo-line .logo-aplus .logo-a {
+  display: inline-block;
+  transform: scaleY(1.30);
+  transform-origin: 50% 60%;
+}
+
+#app-splash .app-splash-logo-line .logo-aplus .logo-plus {
+  display: inline-block;
+  font-family: "Noteworthy", "Chalkboard SE", "Chalkboard", "Bradley Hand", cursive;
+  font-weight: 700;
+}
+
+#app-splash .app-splash-grade {
+  --splash-grade-width: 2.72ch;
+  --splash-reel-step: 1.14em;
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  min-width: var(--splash-grade-width);
+  color: #ff5f70;
+  transform: translateY(-0.03em);
+}
+
+#app-splash .app-splash-grade-draw {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  color: #ff5f70;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+#app-splash.is-started .app-splash-grade-draw {
+  opacity: 1;
+}
+
+#app-splash .app-splash-grade-draw .draw-char {
+  display: inline-block;
+  overflow: hidden;
+  width: 0;
+  vertical-align: baseline;
+}
+
+#app-splash .app-splash-grade-draw .draw-f {
+  display: inline-block;
+  font-family: "Segoe Print", "Bradley Hand", "Marker Felt", "Brush Script MT", cursive;
+  font-weight: 700;
+  transform: scaleY(1.30);
+  transform-origin: 50% 60%;
+}
+
+#app-splash .app-splash-grade-draw .draw-sign {
+  display: inline-block;
+  line-height: 1;
+  margin-left: 0.01em;
+  font-family: "Noteworthy", "Chalkboard SE", "Chalkboard", "Bradley Hand", cursive;
+  font-weight: 700;
+}
+
+#app-splash.is-started .app-splash-grade-draw .draw-f {
+  animation: splashDrawF 330ms steps(12, end) 1400ms forwards;
+}
+
+#app-splash.is-started .app-splash-grade-draw .draw-sign {
+  animation: splashDrawMinus 180ms steps(8, end) 1760ms forwards;
+}
+
+#app-splash .app-splash-grade-reel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  width: var(--splash-grade-width);
+  height: var(--splash-reel-step);
+  overflow-x: hidden;
+  overflow-y: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+#app-splash .app-splash-grade-track {
+  --reel-index: 0;
+  --reel-max-index: 17;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transform: translateY(calc((var(--reel-index) - var(--reel-max-index)) * var(--splash-reel-step)));
+  transition-property: transform;
+  transition-duration: 0ms;
+  transition-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+#app-splash .app-splash-grade-item {
+  height: var(--splash-reel-step);
+  line-height: 1;
+  display: inline-flex;
+  align-items: baseline;
+  color: #ff5f70;
+  white-space: nowrap;
+  box-sizing: border-box;
+  padding-right: 0.08em;
+}
+
+#app-splash .app-splash-grade-item .grade-letter {
+  display: inline-block;
+  font-family: "Segoe Print", "Bradley Hand", "Marker Felt", "Brush Script MT", cursive;
+  font-weight: 700;
+  transform: scaleY(1.30);
+  transform-origin: 50% 60%;
+}
+
+#app-splash .app-splash-grade-item .grade-sign {
+  display: inline-block;
+  line-height: 1;
+  margin-left: 0.01em;
+  font-family: "Noteworthy", "Chalkboard SE", "Chalkboard", "Bradley Hand", cursive;
+  font-weight: 700;
+}
+
+#app-splash.is-reel-running .app-splash-grade-draw {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+#app-splash.is-reel-running .app-splash-grade-reel {
+  opacity: 1;
+}
+
+#app-splash.is-reel-done .app-splash-grade-item {
+  filter: none;
+}
+
+#app-splash .app-splash-sub {
+  display: none !important;
+}
+
+@keyframes splashTestImpact {
+  0% {
+    opacity: 0;
+    transform: translateY(-34px) scale(1.24);
+  }
+  64% {
+    opacity: 1;
+    transform: translateY(6px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes splashDrawF {
+  to {
+    width: 0.74em;
+  }
+}
+
+@keyframes splashDrawMinus {
+  to {
+    width: 0.46em;
+  }
 }
 
 body.is-home-screen #main-menu {
@@ -411,7 +734,7 @@ body.is-home-screen #main-menu h1 {
   position: absolute;
   left: 50%;
   top: 25.6%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -98%);
   width: 100%;
   text-align: center;
   z-index: 2;
@@ -439,11 +762,25 @@ body.is-home-screen #main-menu h1 .logo-aplus .logo-plus {
   font-weight: 700;
 }
 
-body.is-home-screen #main-menu:not(.home-loaded) #motivational-phrase,
-body.is-home-screen #main-menu:not(.home-loaded) #main-buttons,
-body.is-home-screen #main-menu:not(.home-loaded) #main-last-test {
+body.is-home-screen #main-menu:not(.home-loaded) #motivational-phrase {
   opacity: 0;
-  transform: translateY(8px);
+}
+
+body.is-home-screen #main-menu:not(.home-loaded) #main-buttons {
+  opacity: 1;
+  transform: none;
+}
+
+body.is-home-screen #main-menu:not(.home-loaded) #main-primary-row,
+body.is-home-screen #main-menu:not(.home-loaded) #main-config-row,
+body.is-home-screen #main-menu:not(.home-loaded) #main-meta-row {
+  opacity: 0;
+  transform: translateY(115vh);
+}
+
+body.is-home-screen #main-menu:not(.home-loaded) #main-last-test {
+  opacity: 1;
+  transform: none;
 }
 
 body.is-home-screen #main-menu:not(.home-loaded) h1 {
@@ -451,9 +788,13 @@ body.is-home-screen #main-menu:not(.home-loaded) h1 {
   transform: translate(-50%, calc(-50% + 8px));
 }
 
+body.is-home-screen #main-menu.home-logo-continuity:not(.home-loaded) h1 {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+}
+
 body.is-home-screen #main-menu.home-loaded #motivational-phrase {
-  animation: homeFadeUp 500ms ease forwards;
-  animation-delay: 0ms;
+  animation: homeFadeIn 520ms ease 2040ms both;
 }
 
 body.is-home-screen #main-menu.home-loaded h1 {
@@ -461,14 +802,442 @@ body.is-home-screen #main-menu.home-loaded h1 {
   animation-delay: 120ms;
 }
 
+body.is-home-screen #main-menu.home-logo-continuity.home-loaded h1 {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+  animation: none !important;
+}
+
 body.is-home-screen #main-menu.home-loaded #main-buttons {
-  animation: homeFadeUp 550ms ease forwards;
-  animation-delay: 240ms;
+  animation: none;
+}
+
+body.is-home-screen #main-menu.home-loaded #main-primary-row {
+  animation: homeRiseFromBottom 760ms cubic-bezier(0.18, 0.94, 0.24, 1) 120ms both;
+}
+
+body.is-home-screen #main-menu.home-loaded #main-config-row {
+  animation: homeRiseFromBottom 760ms cubic-bezier(0.18, 0.94, 0.24, 1) 200ms both;
+}
+
+body.is-home-screen #main-menu.home-loaded #main-meta-row {
+  animation: homeRiseFromBottom 760ms cubic-bezier(0.18, 0.94, 0.24, 1) 280ms both;
 }
 
 body.is-home-screen #main-menu.home-loaded #main-last-test {
-  animation: homeFadeUp 550ms ease forwards;
-  animation-delay: 320ms;
+  animation: none;
+}
+
+body.is-home-screen #main-menu.home-no-intro *,
+body.is-home-screen #main-menu.home-no-intro *::before,
+body.is-home-screen #main-menu.home-no-intro *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+body.is-home-screen #main-menu.home-no-intro h1 {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+body.is-home-screen #main-menu.home-no-intro #motivational-phrase,
+body.is-home-screen #main-menu.home-no-intro #main-buttons,
+body.is-home-screen #main-menu.home-no-intro #main-primary-row,
+body.is-home-screen #main-menu.home-no-intro #main-config-row,
+body.is-home-screen #main-menu.home-no-intro #main-meta-row,
+body.is-home-screen #main-menu.home-no-intro #main-last-test {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+body.splash-active.is-home-screen #main-menu h1 {
+  opacity: 0 !important;
+}
+
+body.splash-active.is-home-screen #main-primary-row,
+body.splash-active.is-home-screen #main-config-row,
+body.splash-active.is-home-screen #main-meta-row {
+  opacity: 0 !important;
+  transform: translateY(115vh) !important;
+}
+
+body.splash-handoff.is-home-screen #main-menu h1 {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+  transition: opacity 520ms ease !important;
+}
+
+body.splash-shared-logo.is-home-screen #main-menu h1 {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+body.is-home-screen #main-menu.home-logo-settled h1 {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+body.home-debug-freeze.is-home-screen #main-menu.home-static *,
+body.home-debug-freeze.is-home-screen #main-menu.home-static *::before,
+body.home-debug-freeze.is-home-screen #main-menu.home-static *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+body.home-debug-freeze.is-home-screen #main-menu.home-static #motivational-phrase,
+body.home-debug-freeze.is-home-screen #main-menu.home-static #main-buttons,
+body.home-debug-freeze.is-home-screen #main-menu.home-static #main-last-test {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+body.home-debug-freeze.is-home-screen #main-menu.home-static h1 {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 {
+  top: 50% !important;
+}
+
+html[data-home-debug-stage="a-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="b-on-a"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="b-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="b-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="b"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="d-on-c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  display: inline-block !important;
+  position: relative;
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="b-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: var(--home-accent) !important;
+}
+
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: transparent !important;
+}
+
+html[data-home-debug-stage="a-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="b-on-a"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="b-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="b-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: "-";
+  position: absolute;
+  left: 50%;
+  top: -0.26em;
+  transform: translateX(-50%);
+  color: var(--home-accent);
+  font: inherit;
+  font-size: 166.67%;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="b-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: none;
+}
+
+html[data-home-debug-stage="b-on-a"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="b-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="b-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="b"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="d-on-c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a {
+  position: relative;
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="b-on-a"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="b-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="b-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="b"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after {
+  content: "B";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after {
+  content: none;
+}
+
+html[data-home-debug-stage="c-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="d-on-c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before {
+  content: "C";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="d-on-c"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after {
+  content: "D";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+/* Etapas D cerradas + preview E sobre D */
+html[data-home-debug-stage="d-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="d-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="e-on-d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a {
+  position: relative;
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="d-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="d-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before {
+  content: "D";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="e-on-d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before {
+  content: "D";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="e-on-d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after {
+  content: "E";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="d-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: var(--home-accent) !important;
+}
+
+html[data-home-debug-stage="d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="d-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="e-on-d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="d-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: "-";
+  position: absolute;
+  left: 50%;
+  top: -0.26em;
+  transform: translateX(-50%);
+  color: var(--home-accent);
+  font: inherit;
+  font-size: 166.67%;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="d-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="e-on-d"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: none;
+}
+
+/* Etapas E cerradas */
+html[data-home-debug-stage="e-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="e-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a {
+  position: relative;
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="e-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="e-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before {
+  content: "E";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="e-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: var(--home-accent) !important;
+}
+
+html[data-home-debug-stage="e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="e-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="e-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: "-";
+  position: absolute;
+  left: 50%;
+  top: -0.26em;
+  transform: translateX(-50%);
+  color: var(--home-accent);
+  font: inherit;
+  font-size: 166.67%;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="e-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: none;
+}
+
+/* Preview F sobre E */
+html[data-home-debug-stage="f-on-e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a {
+  position: relative;
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="f-on-e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before {
+  content: "E";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="f-on-e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after {
+  content: "F";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="f-on-e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="f-on-e"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: none;
+}
+
+/* Etapas F cerradas */
+html[data-home-debug-stage="f-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="f"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a,
+html[data-home-debug-stage="f-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a {
+  position: relative;
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="f-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="f"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before,
+html[data-home-debug-stage="f-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::before {
+  content: "F";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -56%);
+  color: var(--home-accent);
+  font: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="f-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="f"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after,
+html[data-home-debug-stage="f-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-a::after {
+  content: none;
+}
+
+html[data-home-debug-stage="f-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: var(--home-accent) !important;
+}
+
+html[data-home-debug-stage="f"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus,
+html[data-home-debug-stage="f-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus {
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+html[data-home-debug-stage="f-minus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: "-";
+  position: absolute;
+  left: 50%;
+  top: -0.26em;
+  transform: translateX(-50%);
+  color: var(--home-accent);
+  font: inherit;
+  font-size: 166.67%;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+html[data-home-debug-stage="f-plus"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after,
+html[data-home-debug-stage="f"] body.home-debug-logo-only.is-home-screen #main-menu.home-static h1 .logo-plus::after {
+  content: none;
+}
+
+body.home-debug-logo-only.is-home-screen #motivational-phrase,
+body.home-debug-logo-only.is-home-screen #main-extra,
+body.home-debug-logo-only.is-home-screen #app-version-badge {
+  display: none !important;
 }
 
 body.is-home-screen #main-extra {
@@ -1724,6 +2493,26 @@ body.chari-dark.is-home-screen #main-last-test {
   }
 }
 
+@keyframes homeFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes homeRiseFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(calc(100% + 26vh));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes homeFadeUpTitle {
   from {
     opacity: 0;
@@ -1892,11 +2681,11 @@ hr {
 body.is-pause-modal-open #app-modal-overlay {
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
+  justify-content: center;
+  gap: 18px;
   overflow-y: auto;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  padding-top: max(12px, calc(env(safe-area-inset-top, 0px) + 10px));
+  padding-bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 10px));
 }
 
 body.is-pause-modal-open #app-modal-overlay .modal {

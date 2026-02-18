@@ -339,6 +339,556 @@ const btnManualAddQuestion = document.getElementById("btn-manual-add-question");
 const resultsText = document.getElementById("results-text");
 const statsContent = document.getElementById("stats-content");
 const statsActions = document.getElementById("stats-actions");
+const appSplash = document.getElementById("app-splash");
+const APP_SPLASH_REEL_VALUES = [
+  "F-",
+  "F",
+  "F+",
+  "E-",
+  "E",
+  "E+",
+  "D-",
+  "D",
+  "D+",
+  "C-",
+  "C",
+  "C+",
+  "B-",
+  "B",
+  "B+",
+  "A-",
+  "A",
+  "A+"
+];
+const APP_SPLASH_REEL_RENDER_VALUES = [...APP_SPLASH_REEL_VALUES].reverse();
+const APP_SPLASH_REEL_STEP_DURATIONS_MS = [
+  180,
+  150,
+  130,
+  115,
+  100,
+  90,
+  82,
+  74,
+  68,
+  64,
+  62,
+  64,
+  72,
+  84,
+  220,
+  420,
+  620
+];
+const APP_SPLASH_REEL_START_MS = 2000;
+const APP_SPLASH_REEL_STEP_GAP_MS = 16;
+const APP_SPLASH_REEL_BOOTSTRAP_MS = 140;
+const APP_SPLASH_ASCENT_DELAY_AFTER_REEL_MS = 760;
+const APP_SPLASH_ASCENT_DURATION_MS = 1200;
+const APP_SPLASH_HIDE_FADE_MS = 820;
+const APP_SPLASH_HOME_LOGO_FADE_IN_MS = 520;
+const APP_SPLASH_HANDOFF_FADE_MS = 980;
+const APP_SPLASH_LOGO_HTML = `
+  <span class="app-splash-test">TEST</span>
+  <span class="app-splash-grade">
+    <span class="app-splash-grade-draw" id="app-splash-grade-draw" aria-hidden="true">
+      <span class="draw-char draw-f">F</span><span class="draw-char draw-sign">-</span>
+    </span>
+    <span class="app-splash-grade-reel" id="app-splash-grade-reel" aria-hidden="true">
+      <span class="app-splash-grade-track" id="app-splash-grade-track"></span>
+    </span>
+  </span>
+`;
+const APP_SPLASH_DEBUG_MODES = new Set(["draw", "reel", "done", "ascend"]);
+const APP_HOME_DEBUG_MODE = (function parseHomeDebugMode() {
+  function normalizeHomeDebugMode(raw) {
+    const v = String(raw || "").trim().toLowerCase();
+    if (!v) return "";
+    if (v === "logo" || v === "logo-only" || v === "prehome" || v === "pre-home") return "logo";
+    if (v === "home" || v === "final" || v === "full") return "home";
+    return "";
+  }
+
+  let mode = "";
+  if (typeof document !== "undefined" && document.documentElement) {
+    mode = normalizeHomeDebugMode(document.documentElement.getAttribute("data-home-debug-mode"));
+  }
+  if (typeof window === "undefined" || !window.location || !window.location.search) return mode;
+
+  const params = new URLSearchParams(window.location.search);
+  const enabled = /^(1|true|yes|on)$/i.test(String(params.get("homeDebug") || ""));
+  if (!enabled) return mode;
+  const modeRaw = params.get("homeDebugMode") || params.get("homeDebugStage") || "home";
+  return normalizeHomeDebugMode(modeRaw) || "home";
+})();
+const APP_HOME_DEBUG_FREEZE = !!APP_HOME_DEBUG_MODE;
+const APP_SPLASH_SESSION_SEEN_KEY = "opostest_splash_seen_in_tab_v1";
+const APP_SPLASH_SEEN_IN_TAB = (function wasSplashSeenInCurrentTab() {
+  try {
+    return sessionStorage.getItem(APP_SPLASH_SESSION_SEEN_KEY) === "1";
+  } catch (_) {
+    return false;
+  }
+})();
+const APP_SPLASH_SKIP_ON_RELOAD = (function detectReloadNavigation() {
+  try {
+    if (typeof performance === "undefined" || typeof performance.getEntriesByType !== "function") return false;
+    const navEntries = performance.getEntriesByType("navigation");
+    if (!Array.isArray(navEntries) || navEntries.length === 0) return false;
+    const navEntry = navEntries[0];
+    return APP_SPLASH_SEEN_IN_TAB || !!(navEntry && navEntry.type === "reload");
+  } catch (_) {
+    // ignore
+  }
+  return APP_SPLASH_SEEN_IN_TAB;
+})();
+const APP_SPLASH_DISABLED = APP_HOME_DEBUG_FREEZE || APP_SPLASH_SKIP_ON_RELOAD;
+try {
+  sessionStorage.setItem(APP_SPLASH_SESSION_SEEN_KEY, "1");
+} catch (_) {}
+let appSkipNextHomeIntroAnimation = APP_SPLASH_SKIP_ON_RELOAD;
+let appSplashHideTimer = null;
+let appSplashStartTimer = null;
+let appSplashReelStepTimer = null;
+let appSplashAscentTimer = null;
+let appSplashTimelineDoneTimer = null;
+let appSplashHandoffTimer = null;
+let appSplashFadeOutTimer = null;
+let appSplashHidden = false;
+let appSplashAppReady = !appSplash;
+let appSplashTimelineDone = !appSplash;
+let appSplashSharedHomeLogo = null;
+let appSplashSharedHomeLogoOriginalHTML = "";
+let appSplashSharedHomeLogoOriginalParent = null;
+let appSplashSharedHomeLogoOriginalNextSibling = null;
+let appSplashUsesSharedHomeLogo = false;
+let appSplashPendingHomeLogoContinuity = false;
+let appSplashSharedLogoUnpinRaf1 = null;
+let appSplashSharedLogoUnpinRaf2 = null;
+const TEST_MENU_DETAIL_SCREENS = new Set([
+  "test-menu",
+  "tema-selection",
+  "exam-menu",
+  "exam-block-select"
+]);
+let uiLastScreenState = "home";
+
+function clearSharedLogoViewportPin() {
+  if (appSplashSharedLogoUnpinRaf1) {
+    cancelAnimationFrame(appSplashSharedLogoUnpinRaf1);
+    appSplashSharedLogoUnpinRaf1 = null;
+  }
+  if (appSplashSharedLogoUnpinRaf2) {
+    cancelAnimationFrame(appSplashSharedLogoUnpinRaf2);
+    appSplashSharedLogoUnpinRaf2 = null;
+  }
+  if (!appSplashSharedHomeLogo) return;
+  const s = appSplashSharedHomeLogo.style;
+  s.position = "";
+  s.left = "";
+  s.top = "";
+  s.width = "";
+  s.height = "";
+  s.margin = "";
+  s.transform = "";
+  s.zIndex = "";
+  s.pointerEvents = "";
+  s.willChange = "";
+  s.transition = "";
+}
+
+function setupSplashWithSharedHomeLogo() {
+  if (appSplashUsesSharedHomeLogo || !appSplash || !mainMenu) return;
+  const splashStage = appSplash.querySelector(".app-splash-stage");
+  const homeLogo = mainMenu.querySelector("h1");
+  if (!splashStage || !homeLogo) return;
+
+  const legacySplashLogo = splashStage.querySelector(".app-splash-logo-line");
+  if (legacySplashLogo && legacySplashLogo !== homeLogo) legacySplashLogo.remove();
+
+  appSplashSharedHomeLogo = homeLogo;
+  appSplashSharedHomeLogoOriginalHTML = homeLogo.innerHTML;
+  appSplashSharedHomeLogoOriginalParent = homeLogo.parentNode;
+  appSplashSharedHomeLogoOriginalNextSibling = homeLogo.nextSibling;
+
+  homeLogo.classList.add("app-splash-logo-line", "app-splash-home-logo");
+  homeLogo.setAttribute("aria-label", "TESTA+");
+  homeLogo.innerHTML = APP_SPLASH_LOGO_HTML;
+  splashStage.appendChild(homeLogo);
+  if (document.body) document.body.classList.add("splash-shared-logo");
+  appSplashUsesSharedHomeLogo = true;
+}
+
+function restoreSharedHomeLogoAfterSplash() {
+  if (!appSplashUsesSharedHomeLogo || !appSplashSharedHomeLogo) return;
+  const homeLogo = appSplashSharedHomeLogo;
+  const parent = appSplashSharedHomeLogoOriginalParent;
+  const nextSibling = appSplashSharedHomeLogoOriginalNextSibling;
+  const fromRect = homeLogo.getBoundingClientRect();
+
+  homeLogo.classList.remove("app-splash-logo-line", "app-splash-home-logo");
+  homeLogo.removeAttribute("aria-label");
+  if (
+    appSplashSharedHomeLogoOriginalHTML &&
+    String(homeLogo.innerHTML || "").trim() !== String(appSplashSharedHomeLogoOriginalHTML).trim()
+  ) {
+    homeLogo.innerHTML = appSplashSharedHomeLogoOriginalHTML;
+  }
+
+  if (parent) {
+    if (nextSibling && nextSibling.parentNode === parent) {
+      parent.insertBefore(homeLogo, nextSibling);
+    } else {
+      parent.appendChild(homeLogo);
+    }
+  }
+
+  // Evita un micro-salto visual al cambiar de contenedor:
+  // mantenemos el logo fijado 2 frames y luego soltamos al layout de Home.
+  clearSharedLogoViewportPin();
+  if (fromRect && fromRect.width && fromRect.height) {
+    const s = homeLogo.style;
+    s.position = "fixed";
+    s.left = `${fromRect.left}px`;
+    s.top = `${fromRect.top}px`;
+    s.width = `${fromRect.width}px`;
+    s.height = `${fromRect.height}px`;
+    s.margin = "0";
+    s.transform = "none";
+    s.zIndex = "2147483645";
+    s.pointerEvents = "none";
+    s.willChange = "transform";
+    s.transition = "none";
+    appSplashSharedLogoUnpinRaf1 = requestAnimationFrame(() => {
+      appSplashSharedLogoUnpinRaf1 = null;
+      appSplashSharedLogoUnpinRaf2 = requestAnimationFrame(() => {
+        appSplashSharedLogoUnpinRaf2 = null;
+        clearSharedLogoViewportPin();
+      });
+    });
+  }
+
+  appSplashUsesSharedHomeLogo = false;
+  appSplashPendingHomeLogoContinuity = true;
+}
+
+function prepareSharedLogoForHomeHandoff() {
+  if (!appSplashUsesSharedHomeLogo || !appSplashSharedHomeLogo) return;
+  if (!appSplashSharedHomeLogoOriginalHTML) return;
+  if (
+    String(appSplashSharedHomeLogo.innerHTML || "").trim() === String(appSplashSharedHomeLogoOriginalHTML).trim()
+  ) {
+    return;
+  }
+  appSplashSharedHomeLogo.innerHTML = appSplashSharedHomeLogoOriginalHTML;
+}
+
+function getActiveSplashLogoEl() {
+  if (appSplashUsesSharedHomeLogo && appSplashSharedHomeLogo) return appSplashSharedHomeLogo;
+  if (!appSplash) return null;
+  return appSplash.querySelector(".app-splash-logo-line");
+}
+
+function measureHomeLogoRectForSplashAscent() {
+  if (!mainMenu) return null;
+
+  if (!appSplashUsesSharedHomeLogo) {
+    const homeLogo = mainMenu.querySelector("h1");
+    if (!homeLogo) return null;
+    return homeLogo.getBoundingClientRect();
+  }
+
+  const parent = appSplashSharedHomeLogoOriginalParent;
+  if (!parent) return null;
+
+  const ghost = document.createElement("h1");
+  ghost.setAttribute("aria-hidden", "true");
+  ghost.style.position = "absolute";
+  ghost.style.visibility = "hidden";
+  ghost.style.pointerEvents = "none";
+  ghost.style.opacity = "0";
+  ghost.style.margin = "0";
+  ghost.innerHTML = appSplashSharedHomeLogoOriginalHTML;
+
+  const hadSettled = mainMenu.classList.contains("home-logo-settled");
+  if (!hadSettled) mainMenu.classList.add("home-logo-settled");
+  const nextSibling = appSplashSharedHomeLogoOriginalNextSibling;
+  if (nextSibling && nextSibling.parentNode === parent) {
+    parent.insertBefore(ghost, nextSibling);
+  } else {
+    parent.appendChild(ghost);
+  }
+
+  const rect = ghost.getBoundingClientRect();
+  ghost.remove();
+  if (!hadSettled) mainMenu.classList.remove("home-logo-settled");
+  return (rect && rect.width && rect.height) ? rect : null;
+}
+
+function parseAppSplashDebugConfig() {
+  if (typeof window === "undefined" || !window.location || !window.location.search) return null;
+  const params = new URLSearchParams(window.location.search);
+  const enabled = /^(1|true|yes|on)$/i.test(String(params.get("splashDebug") || ""));
+  if (!enabled) return null;
+
+  const phaseRaw = String(params.get("phase") || "done").trim().toLowerCase();
+  const phase = APP_SPLASH_DEBUG_MODES.has(phaseRaw) ? phaseRaw : "done";
+
+  let gradeRaw = String(params.get("grade") || "A+").trim().toUpperCase();
+  gradeRaw = gradeRaw.replace(/\s+/g, "");
+  const grade = APP_SPLASH_REEL_VALUES.includes(gradeRaw) ? gradeRaw : "A+";
+
+  return { phase, grade };
+}
+
+const APP_SPLASH_DEBUG_CONFIG = parseAppSplashDebugConfig();
+const APP_SPLASH_DEBUG_ENABLED = !!APP_SPLASH_DEBUG_CONFIG;
+
+if (appSplash && document.body && !APP_SPLASH_DISABLED) {
+  setupSplashWithSharedHomeLogo();
+}
+
+function scheduleAppSplashAscent() {
+  if (!appSplash || appSplashTimelineDone) return;
+  if (appSplashAscentTimer) clearTimeout(appSplashAscentTimer);
+  appSplashAscentTimer = setTimeout(() => {
+    if (!appSplash) return;
+    syncSplashAscentWithHomeLogo();
+    appSplash.classList.add("is-ascending");
+    if (appSplashTimelineDoneTimer) clearTimeout(appSplashTimelineDoneTimer);
+    appSplashTimelineDoneTimer = setTimeout(() => {
+      appSplashTimelineDone = true;
+      maybeHideAppSplash();
+    }, APP_SPLASH_ASCENT_DURATION_MS);
+  }, APP_SPLASH_ASCENT_DELAY_AFTER_REEL_MS);
+}
+
+function syncSplashAscentWithHomeLogo() {
+  if (!appSplash || !mainMenu) return;
+  const splashLogo = getActiveSplashLogoEl();
+  const homeRect = measureHomeLogoRectForSplashAscent();
+  if (!splashLogo || !homeRect) return;
+
+  const splashRect = splashLogo.getBoundingClientRect();
+  if (!splashRect.width || !splashRect.height || !homeRect.width || !homeRect.height) return;
+
+  const splashCx = splashRect.left + splashRect.width / 2;
+  const splashCy = splashRect.top + splashRect.height / 2;
+  const homeCx = homeRect.left + homeRect.width / 2;
+  const homeCy = homeRect.top + homeRect.height / 2;
+  const dx = homeCx - splashCx;
+  const dy = homeCy - splashCy;
+  const scaleRaw = homeRect.height / splashRect.height;
+  const scale = Math.min(1.2, Math.max(0.7, scaleRaw || 1));
+
+  appSplash.style.setProperty("--app-splash-ascent-x", `${dx.toFixed(2)}px`);
+  appSplash.style.setProperty("--app-splash-ascent-y", `${dy.toFixed(2)}px`);
+  appSplash.style.setProperty("--app-splash-ascent-scale", scale.toFixed(4));
+}
+
+function renderSplashGradeValue(value) {
+  const m = String(value || "").match(/^([A-F])([+-]?)$/);
+  if (!m) return `<span class="grade-letter">${escapeHtml(String(value || ""))}</span>`;
+  const letter = escapeHtml(m[1]);
+  const sign = m[2] ? `<span class="grade-sign">${escapeHtml(m[2])}</span>` : "";
+  return `<span class="grade-letter">${letter}</span>${sign}`;
+}
+
+if (appSplash && document.body) {
+  if (APP_SPLASH_DISABLED) {
+    appSplashHidden = true;
+    appSplashAppReady = true;
+    appSplashTimelineDone = true;
+    appSplash.classList.add("is-hidden");
+    appSplash.setAttribute("aria-hidden", "true");
+    appSplash.style.display = "none";
+  } else {
+  document.body.classList.add("splash-active");
+  const reelTrack = document.getElementById("app-splash-grade-track");
+  const prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const initialReelIndex = APP_SPLASH_DEBUG_ENABLED
+    ? Math.max(0, APP_SPLASH_REEL_VALUES.indexOf(APP_SPLASH_DEBUG_CONFIG.grade))
+    : (prefersReducedMotion ? (APP_SPLASH_REEL_VALUES.length - 1) : 0);
+  if (reelTrack) {
+    reelTrack.innerHTML = APP_SPLASH_REEL_RENDER_VALUES
+      .map(v => `<span class="app-splash-grade-item">${renderSplashGradeValue(v)}</span>`)
+      .join("");
+    reelTrack.style.setProperty("--reel-max-index", String(APP_SPLASH_REEL_VALUES.length - 1));
+    reelTrack.style.setProperty("--reel-index", String(initialReelIndex));
+  }
+  if (APP_SPLASH_DEBUG_ENABLED) {
+    appSplash.classList.add("is-started");
+    if (APP_SPLASH_DEBUG_CONFIG.phase !== "draw") {
+      appSplash.classList.add("is-reel-running");
+    }
+    if (APP_SPLASH_DEBUG_CONFIG.phase === "done" || APP_SPLASH_DEBUG_CONFIG.phase === "ascend") {
+      appSplash.classList.add("is-reel-done");
+      prepareSharedLogoForHomeHandoff();
+    }
+    if (APP_SPLASH_DEBUG_CONFIG.phase === "ascend") {
+      appSplash.classList.add("is-ascending");
+    }
+  } else if (prefersReducedMotion) {
+    appSplash.classList.add("is-started", "is-reel-running", "is-reel-done", "is-ascending");
+    prepareSharedLogoForHomeHandoff();
+    appSplashTimelineDone = true;
+  } else {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        appSplash.classList.add("is-started");
+      });
+    });
+    appSplashStartTimer = setTimeout(() => {
+      startAppSplashReel();
+    }, APP_SPLASH_REEL_START_MS);
+  }
+  }
+}
+
+function startAppSplashReel() {
+  if (!appSplash) return;
+  const reelTrack = document.getElementById("app-splash-grade-track");
+  if (!reelTrack) {
+    appSplashTimelineDone = true;
+    maybeHideAppSplash();
+    return;
+  }
+  appSplash.classList.add("is-reel-running");
+  let reelIndex = 0;
+
+  const step = () => {
+    if (reelIndex >= APP_SPLASH_REEL_VALUES.length - 1) {
+      appSplash.classList.add("is-reel-done");
+      prepareSharedLogoForHomeHandoff();
+      scheduleAppSplashAscent();
+      return;
+    }
+    const ms = APP_SPLASH_REEL_STEP_DURATIONS_MS[reelIndex] || 120;
+    reelIndex += 1;
+    reelTrack.style.transitionDuration = `${ms}ms`;
+    reelTrack.style.setProperty("--reel-index", String(reelIndex));
+    appSplashReelStepTimer = setTimeout(step, ms + APP_SPLASH_REEL_STEP_GAP_MS);
+  };
+
+  appSplashReelStepTimer = setTimeout(step, APP_SPLASH_REEL_BOOTSTRAP_MS);
+}
+
+function maybeHideAppSplash(opts = {}) {
+  if (appSplashHidden) return;
+  if (!appSplashAppReady || !appSplashTimelineDone) return;
+  appSplashHidden = true;
+
+  const prefersReducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const immediate = !!opts.immediate || prefersReducedMotion;
+  const delay = immediate ? 0 : 120;
+  const hideFadeMs = immediate ? 0 : APP_SPLASH_HIDE_FADE_MS;
+  const homeLogoFadeInMs = (immediate || appSplashUsesSharedHomeLogo) ? 0 : APP_SPLASH_HOME_LOGO_FADE_IN_MS;
+
+  const finalize = () => {
+    if (!appSplash) {
+      if (document.body) document.body.classList.remove("splash-active");
+      return;
+    }
+
+    const body = document.body;
+    const isHomeScreen = !!(body && body.classList.contains("is-home-screen"));
+
+    if (appSplashReelStepTimer) {
+      clearTimeout(appSplashReelStepTimer);
+      appSplashReelStepTimer = null;
+    }
+    if (appSplashStartTimer) {
+      clearTimeout(appSplashStartTimer);
+      appSplashStartTimer = null;
+    }
+    if (appSplashAscentTimer) {
+      clearTimeout(appSplashAscentTimer);
+      appSplashAscentTimer = null;
+    }
+    if (appSplashTimelineDoneTimer) {
+      clearTimeout(appSplashTimelineDoneTimer);
+      appSplashTimelineDoneTimer = null;
+    }
+    if (appSplashFadeOutTimer) {
+      clearTimeout(appSplashFadeOutTimer);
+      appSplashFadeOutTimer = null;
+    }
+    if (appSplashHandoffTimer) {
+      clearTimeout(appSplashHandoffTimer);
+      appSplashHandoffTimer = null;
+    }
+
+    const hideSplashNow = () => {
+      appSplash.classList.add("is-hidden");
+      appSplash.setAttribute("aria-hidden", "true");
+      if (appSplashUsesSharedHomeLogo) {
+        if (hideFadeMs > 0) {
+          const restoreDelayMs = Math.min(120, Math.max(24, Math.floor(hideFadeMs * 0.25)));
+          setTimeout(() => {
+            restoreSharedHomeLogoAfterSplash();
+          }, restoreDelayMs);
+        } else {
+          restoreSharedHomeLogoAfterSplash();
+        }
+      }
+      setTimeout(() => {
+        appSplash.style.display = "none";
+        const shouldTriggerHomeIntro = !!(
+          document.body &&
+          document.body.classList.contains("is-home-screen") &&
+          mainMenu
+        );
+        if (shouldTriggerHomeIntro) {
+          triggerHomeIntroAnimation();
+        }
+        if (document.body) {
+          // Quitar esta clase en el siguiente tick evita un frame "sin estilo"
+          // entre el logo de splash y el logo de home.
+          setTimeout(() => {
+            if (document.body) document.body.classList.remove("splash-shared-logo");
+          }, 0);
+        }
+      }, hideFadeMs + 40);
+      if (document.body) document.body.classList.remove("splash-active");
+    };
+
+    if (isHomeScreen && body) {
+      if (!appSplashUsesSharedHomeLogo) {
+        body.classList.add("splash-handoff");
+        appSplashHandoffTimer = setTimeout(() => {
+          if (document.body) document.body.classList.remove("splash-handoff");
+          appSplashHandoffTimer = null;
+        }, Math.max(APP_SPLASH_HANDOFF_FADE_MS, homeLogoFadeInMs + hideFadeMs + 120));
+      }
+
+      if (homeLogoFadeInMs > 0) {
+        appSplashFadeOutTimer = setTimeout(() => {
+          if (mainMenu) mainMenu.classList.add("home-logo-settled");
+          hideSplashNow();
+          appSplashFadeOutTimer = null;
+        }, homeLogoFadeInMs);
+      } else {
+        if (mainMenu) mainMenu.classList.add("home-logo-settled");
+        hideSplashNow();
+      }
+      return;
+    }
+
+    hideSplashNow();
+  };
+
+  if (appSplashHideTimer) clearTimeout(appSplashHideTimer);
+  appSplashHideTimer = setTimeout(() => {
+    appSplashHideTimer = null;
+    finalize();
+  }, delay);
+}
+
+function markAppReadyForSplashExit() {
+  if (APP_SPLASH_DEBUG_ENABLED) return;
+  appSplashAppReady = true;
+  maybeHideAppSplash();
+}
 
 // =======================
 // MODAL (alert/confirm integrados)
@@ -359,8 +909,17 @@ function showPauseExplanationOverlay(text) {
     box = document.createElement("div");
     box.id = "pause-explanation-overlay";
   }
-  if (modalOverlay && box.parentElement !== modalOverlay) {
-    modalOverlay.appendChild(box);
+  if (modalOverlay) {
+    const modal = modalOverlay.querySelector(".modal");
+    if (box.parentElement !== modalOverlay) {
+      if (modal) {
+        modalOverlay.insertBefore(box, modal);
+      } else {
+        modalOverlay.appendChild(box);
+      }
+    } else if (modal && box.nextElementSibling !== modal) {
+      modalOverlay.insertBefore(box, modal);
+    }
   } else if (!box.parentElement) {
     document.body.appendChild(box);
   }
@@ -380,8 +939,8 @@ function positionPauseExplanationOverlay() {
     const modal = modalOverlay.querySelector(".modal");
     const overlayRect = modalOverlay.getBoundingClientRect();
     const modalRect = modal ? modal.getBoundingClientRect() : null;
-    const modalBottom = modalRect ? modalRect.bottom : overlayRect.top;
-    const available = Math.floor(overlayRect.bottom - modalBottom - 16);
+    const modalTop = modalRect ? modalRect.top : overlayRect.bottom;
+    const available = Math.floor(modalTop - overlayRect.top - 16);
     box.style.maxHeight = `${Math.max(120, available)}px`;
     return;
   }
@@ -630,12 +1189,18 @@ function lsSetJSON(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function unlockBootingUiMask() {
+  if (!document.body) return;
+  document.body.classList.remove("app-booting");
+}
+
 function setUiScreenState(screen, extra = {}) {
   const payload = {
     screen: String(screen || "home"),
     savedAt: new Date().toISOString(),
     ...(extra && typeof extra === "object" ? extra : {})
   };
+  uiLastScreenState = payload.screen;
   lsSetJSON(LS_UI_STATE, payload);
 }
 
@@ -644,6 +1209,7 @@ function getUiScreenState() {
   if (!raw || typeof raw !== "object") return null;
   const screen = String(raw.screen || "").trim();
   if (!screen) return null;
+  uiLastScreenState = screen;
   return { ...raw, screen };
 }
 
@@ -674,6 +1240,7 @@ function detectCurrentUiScreen() {
   if (isElementShown(testMenu)) {
     if (mode === "bank") return "bank";
     if (mode === "trash") return "trash";
+    if (TEST_MENU_DETAIL_SCREENS.has(uiLastScreenState)) return uiLastScreenState;
     return "test-menu";
   }
   if (isElementShown(mainMenu)) return "home";
@@ -698,6 +1265,11 @@ function persistUiStateForReload() {
 }
 
 async function restoreUiScreenAfterBootstrap() {
+  if (APP_HOME_DEBUG_FREEZE) {
+    showMainMenu();
+    return;
+  }
+
   const state = getUiScreenState();
   if (!state) {
     showMainMenu();
@@ -733,7 +1305,7 @@ async function restoreUiScreenAfterBootstrap() {
       showExamByBlockSelect();
       return;
     case "test-menu":
-      showTestMenuScreen();
+      showTemaSelectionScreen();
       return;
     case "results":
       showResultsScreen();
@@ -2050,9 +2622,11 @@ function refreshDbCountPill() {
 // (No redefinir getExistingIdSet ni prunePendingGhostIds aquí)
 
 function hideAll() {
+  unlockBootingUiMask();
   closeHomeStartPanel();
   closeHomeConfigPanel();
   closeHomeVoicePanel();
+  if (mainMenu) mainMenu.classList.remove("home-no-intro");
   document.body.classList.remove("is-home-screen");
   mainMenu.style.display = "none";
   testMenu.style.display = "none";
@@ -2085,10 +2659,40 @@ function ensureHomeStarsLayer() {
 
 function triggerHomeIntroAnimation() {
   if (!mainMenu) return;
+  const keepLogoContinuity = appSplashPendingHomeLogoContinuity;
+  const skipIntroNow = !!appSkipNextHomeIntroAnimation;
+  if (skipIntroNow) appSkipNextHomeIntroAnimation = false;
+  if (keepLogoContinuity) {
+    mainMenu.classList.add("home-logo-continuity");
+    appSplashPendingHomeLogoContinuity = false;
+  }
+  if (APP_HOME_DEBUG_FREEZE) {
+    if (document.body) document.body.classList.add("home-debug-freeze");
+    if (document.body) {
+      document.body.classList.toggle("home-debug-logo-only", APP_HOME_DEBUG_MODE === "logo");
+    }
+    mainMenu.classList.add("home-loaded", "home-static");
+    return;
+  }
+  if (skipIntroNow) {
+    mainMenu.classList.add("home-no-intro");
+    mainMenu.classList.add("home-loaded");
+    if (keepLogoContinuity) {
+      mainMenu.classList.remove("home-logo-continuity");
+    }
+    return;
+  }
   mainMenu.classList.remove("home-loaded");
+  // Fuerza reflow para reiniciar animaciones CSS de entrada en Safari/iOS.
+  void mainMenu.offsetWidth;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       mainMenu.classList.add("home-loaded");
+      if (keepLogoContinuity) {
+        setTimeout(() => {
+          if (mainMenu) mainMenu.classList.remove("home-logo-continuity");
+        }, 1300);
+      }
     });
   });
 }
@@ -2476,6 +3080,10 @@ function showMainMenu() {
   stopTimer();
   hideAll();
   setUiScreenState("home");
+  const splashActive = !!(document.body && document.body.classList.contains("splash-active"));
+  mainMenu.classList.remove("home-loaded");
+  if (splashActive) mainMenu.classList.remove("home-logo-settled");
+  if (!splashActive) mainMenu.classList.remove("home-logo-continuity");
   document.body.classList.add("is-home-screen");
   mainMenu.style.display = "block";
   ensureHomeStarsLayer();
@@ -2884,7 +3492,11 @@ function showMainMenu() {
 
   // ✅ Hook: añade el toggle de modo oscuro en el menú principal
   injectDarkModeToggleIntoMainMenu();
-  triggerHomeIntroAnimation();
+  if (splashActive) {
+    mainMenu.classList.remove("home-loaded");
+  } else {
+    triggerHomeIntroAnimation();
+  }
 }
 
 function showConfigScreen() {
@@ -3628,7 +4240,10 @@ function showTemaSelectionScreen() {
     <div id="custom-options-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
       <div class="row" style="justify-content:center;margin:8px 0;">
         <button id="btn-toggle-all">Marcar todas</button>
-        <button id="btn-less-used">Solo preguntas menos usadas</button>
+        <button id="btn-less-used">Solo preguntas no/menos vistas</button>
+      </div>
+      <div class="row" style="justify-content:center;margin:8px 0;">
+        <button id="btn-seen-only">Solo preguntas ya vistas</button>
       </div>
     </div>
 
@@ -3741,10 +4356,12 @@ function showTemaSelectionScreen() {
   }
 
   const lessUsedBtn = document.getElementById("btn-less-used");
+  const seenOnlyBtn = document.getElementById("btn-seen-only");
   const toggleAllBtn = document.getElementById("btn-toggle-all");
   const perfectionBtn = document.getElementById("btn-perfection-toggle");
   const numButtonsWrap = document.getElementById("num-questions-buttons");
   let lessUsedActive = false;
+  let seenOnlyActive = false;
   let perfectionActive = false;
   let numQuestionsValue = null;
   const timeButtonsWrap = document.getElementById("time-mode-buttons");
@@ -3846,22 +4463,68 @@ function showTemaSelectionScreen() {
   });
   fuenteWrap.querySelectorAll(".fuente-btn").forEach(() => {});
 
+  const setSimpleToggleButtonState = (btn, active) => {
+    if (!btn) return;
+    btn.className = active ? "success" : "";
+    if (!active) {
+      btn.style.background = "var(--surface)";
+      btn.style.borderColor = "var(--border)";
+    } else {
+      btn.style.background = "";
+      btn.style.borderColor = "";
+    }
+  };
+
+  const deactivateLessUsedFilter = () => {
+    if (!lessUsedActive) return;
+    lessUsedActive = false;
+    setSimpleToggleButtonState(lessUsedBtn, false);
+    clearAutoTemaMarks();
+  };
+
+  const deactivateSeenOnlyFilter = () => {
+    if (!seenOnlyActive) return;
+    seenOnlyActive = false;
+    setSimpleToggleButtonState(seenOnlyBtn, false);
+  };
+
+  const deactivateExclusiveFiltersForToggleAll = () => {
+    deactivateLessUsedFilter();
+    deactivateSeenOnlyFilter();
+  };
+
+  const deactivateToggleAllForExclusiveFilters = () => {
+    if (!toggleAllBtn) return;
+    toggleAllBtn.textContent = "Marcar todas";
+    toggleAllBtn.className = "";
+  };
+
   if (lessUsedBtn) {
     lessUsedBtn.onclick = () => {
-      lessUsedActive = !lessUsedActive;
-      if (lessUsedActive) {
-        lessUsedBtn.className = "success";
-        lessUsedBtn.style.background = "";
-        lessUsedBtn.style.borderColor = "";
-      } else {
-        lessUsedBtn.className = "";
-        lessUsedBtn.style.background = "var(--surface)";
-        lessUsedBtn.style.borderColor = "var(--border)";
-      }
-      if (lessUsedActive) {
+      const nextState = !lessUsedActive;
+      if (nextState) {
+        deactivateToggleAllForExclusiveFilters();
+        deactivateSeenOnlyFilter();
+        lessUsedActive = true;
+        setSimpleToggleButtonState(lessUsedBtn, true);
         markAutoTemasForLessUsed();
       } else {
-        clearAutoTemaMarks();
+        deactivateLessUsedFilter();
+      }
+      updateSelectedCount();
+    };
+  }
+
+  if (seenOnlyBtn) {
+    seenOnlyBtn.onclick = () => {
+      const nextState = !seenOnlyActive;
+      if (nextState) {
+        deactivateToggleAllForExclusiveFilters();
+        deactivateLessUsedFilter();
+        seenOnlyActive = true;
+        setSimpleToggleButtonState(seenOnlyBtn, true);
+      } else {
+        deactivateSeenOnlyFilter();
       }
       updateSelectedCount();
     };
@@ -3876,6 +4539,7 @@ function showTemaSelectionScreen() {
 
   if (toggleAllBtn) {
     toggleAllBtn.onclick = () => {
+      deactivateExclusiveFiltersForToggleAll();
       const anyChecked = wrap.querySelectorAll(".tema-checkbox:checked").length > 0;
       if (!anyChecked) {
         wrap.querySelectorAll(".bloque-toggle").forEach(cb => {
@@ -3917,8 +4581,10 @@ function showTemaSelectionScreen() {
   }
   const clearAllSelections = () => {
     lessUsedActive = false;
+    seenOnlyActive = false;
     perfectionActive = false;
-    if (lessUsedBtn) lessUsedBtn.className = "";
+    setSimpleToggleButtonState(lessUsedBtn, false);
+    setSimpleToggleButtonState(seenOnlyBtn, false);
     updatePerfectionUi();
     if (toggleAllBtn) {
       toggleAllBtn.textContent = "Marcar todas";
@@ -3982,6 +4648,7 @@ function showTemaSelectionScreen() {
       mode: perfectionActive ? "perfection" : "practice",
       allQuestions: false,
       lessUsed: lessUsedActive,
+      seenOnly: seenOnlyActive,
       temas: temasChecked,
       fuentes: fuentesChecked,
       fuentesActiveCount: fuentesChecked.length,
@@ -4135,7 +4802,7 @@ function buildPoolFromConfig(config) {
     pool = [...questions];
   } else {
     if (!config.temas || config.temas.length === 0) {
-      pool = config.lessUsed ? [...questions] : [];
+      pool = (config.lessUsed || config.seenOnly) ? [...questions] : [];
     } else {
       const temaSet = new Set(config.temas);
       pool = questions.filter(q => temaSet.has(normalizeTemaKey(q.tema)));
@@ -4168,6 +4835,8 @@ function buildPoolFromConfig(config) {
       const takeCount = Math.max(1, Math.ceil(sorted.length * 0.2));
       pool = sorted.slice(0, takeCount);
     }
+  } else if (config.seenOnly) {
+    pool = pool.filter(q => getSeenCount(q.id) > 0);
   }
 
   if (typeof config.numQuestions === "number" && config.numQuestions > 0) {
@@ -7007,6 +7676,9 @@ fetch("questions_manifest.json")
     applyDeletedFilter();
     refreshDbCountPill();
     await restoreUiScreenAfterBootstrap();
+  })
+  .finally(() => {
+    markAppReadyForSplashExit();
   });
 
   // commit test identidad noreply

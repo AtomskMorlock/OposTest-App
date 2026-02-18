@@ -1,3 +1,4 @@
+0.6.0 - Ajustes de recarga (sin splash tras refresh), corrección de restauración de pantallas al recargar y mejoras en filtros de "Personalizar test" (incluye "Solo preguntas ya vistas" y exclusión mutua de filtros).
 0.5.0 - PWA instalable para móvil con Service Worker y manifest
 0.4.4 - corrección version safari
 0.4.3 - correcion voces

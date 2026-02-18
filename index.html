@@ -13,7 +13,35 @@
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="favicon.svg">
   <style>
-    body { font-family: Arial, sans-serif; padding: 12px 10px 12px; background: var(--bg); min-height: 100vh; min-height: 100dvh; }
+    :root {
+      --bg: #16103f;
+      --surface: #ffffff;
+      --border: #cfe0ff;
+      --brand: #3f78d8;
+      --brand-soft: #f2f8ff;
+      --error-soft: #fdeeee;
+      --error-border: #e6a6a6;
+      --overlay-scrim: rgba(10, 20, 35, 0.35);
+      --shadow-1: 0 6px 18px rgba(24, 52, 98, 0.08);
+      --warning-soft: #fff7d8;
+      --warning-border: #eedda1;
+      --progress-track: #e6eefc;
+      --progress-fill: #6aa9ff;
+      --timer-warn: #d9a404;
+      --accent-danger: #d9534f;
+    }
+    body { font-family: Arial, sans-serif; padding: 12px 10px 12px; background: var(--bg, #16103f); min-height: 100vh; min-height: 100dvh; }
+    body.app-booting #main-menu,
+    body.app-booting #test-menu,
+    body.app-booting #config-container,
+    body.app-booting #voice-settings-container,
+    body.app-booting #test-container,
+    body.app-booting #results-container,
+    body.app-booting #review-container,
+    body.app-booting #stats-container,
+    body.app-booting #import-container {
+      visibility: hidden !important;
+    }
     h1, h2, h3, h4 { margin: 10px 0; }
     #main-menu h1 { color: var(--brand); font-family: "Trebuchet MS", "Verdana", "Arial", sans-serif; }
     button { display: block; margin: 10px 0; padding: 10px; width: 280px; cursor: pointer; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
@@ -147,7 +175,7 @@
   <script>
     (function () {
       const VERSION_STORAGE_KEY = "opostest_last_known_version_v1";
-      const FALLBACK_VERSION = "0.5.1";
+      const FALLBACK_VERSION = "0.6.0";
       const VERSION_RE = /^\d+\.\d+\.\d+$/;
       let activeStyleVersion = "";
 
@@ -235,7 +263,27 @@
     })();
   </script>
 </head>
-<body>
+<body class="app-booting">
+
+<div id="app-splash" aria-hidden="false">
+  <div class="app-splash-stars" aria-hidden="true"></div>
+  <div class="app-splash-core" role="status" aria-live="polite">
+    <div class="app-splash-stage">
+      <div class="app-splash-logo-line" aria-label="TESTA+">
+        <span class="app-splash-test">TEST</span>
+        <span class="app-splash-grade">
+          <span class="app-splash-grade-draw" id="app-splash-grade-draw" aria-hidden="true">
+            <span class="draw-char draw-f">F</span><span class="draw-char draw-sign">-</span>
+          </span>
+          <span class="app-splash-grade-reel" id="app-splash-grade-reel" aria-hidden="true">
+            <span class="app-splash-grade-track" id="app-splash-grade-track"></span>
+          </span>
+        </span>
+      </div>
+    </div>
+    <div class="app-splash-sub">Preparando la app…</div>
+  </div>
+</div>
 
 <!-- PANTALLA PRINCIPAL -->
 <div id="main-menu" class="card">
