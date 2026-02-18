@@ -1,0 +1,20 @@
+{
+  "name": "TESTA+",
+  "short_name": "TESTA+",
+  "description": "Aplicación de tests para oposiciones.",
+  "lang": "es-ES",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f6fb",
+  "theme_color": "#0f4c81",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

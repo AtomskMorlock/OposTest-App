@@ -1,3 +1,4 @@
+0.5.0 - PWA instalable para móvil con Service Worker y manifest
 0.4.4 - corrección version safari
 0.4.3 - correcion voces
 0.4.2 - descripcion correccion voz

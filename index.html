@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>...</title>
   <link rel="icon" href="favicon.svg?v=20260218c" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f4c81">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="TESTA+">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="favicon.svg">
   <style>
     body { font-family: Arial, sans-serif; padding: 12px 10px 12px; background: var(--bg); min-height: 100vh; min-height: 100dvh; }
     h1, h2, h3, h4 { margin: 10px 0; }
@@ -140,7 +147,7 @@
   <script>
     (function () {
       const VERSION_STORAGE_KEY = "opostest_last_known_version_v1";
-      const FALLBACK_VERSION = "0.4.3";
+      const FALLBACK_VERSION = "0.5.0";
       const VERSION_RE = /^\d+\.\d+\.\d+$/;
       let activeStyleVersion = "";
 
@@ -505,10 +512,43 @@ Plantilla exacta:
       });
     }
 
+    function registerServiceWorker() {
+      const isEligibleProtocol =
+        location.protocol === "https:" ||
+        location.hostname === "localhost" ||
+        location.hostname === "127.0.0.1";
+      if (!isEligibleProtocol) return Promise.resolve();
+      if (!("serviceWorker" in navigator)) return Promise.resolve();
+
+      return navigator.serviceWorker
+        .register("./sw.js")
+        .then(reg => {
+          reg.update().catch(() => {});
+          if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+          reg.addEventListener("updatefound", () => {
+            const installing = reg.installing;
+            if (!installing) return;
+            installing.addEventListener("statechange", () => {
+              if (installing.state === "installed" && navigator.serviceWorker.controller) {
+                installing.postMessage({ type: "SKIP_WAITING" });
+              }
+            });
+          });
+        })
+        .catch(() => {});
+    }
+
+    navigator.serviceWorker?.addEventListener?.("controllerchange", () => {
+      if (window.__swReloadedForUpdate) return;
+      window.__swReloadedForUpdate = true;
+      window.location.reload();
+    });
+
     const versionPromise = window.__appVersionPromise || Promise.resolve(window.__appAssetVersion || window.APP_VERSION || "");
     versionPromise
       .then(v => loadApp(v))
-      .catch(() => loadApp(window.__appAssetVersion || window.APP_VERSION || ""));
+      .catch(() => loadApp(window.__appAssetVersion || window.APP_VERSION || ""))
+      .finally(() => registerServiceWorker());
   })();
 </script>
 </body>
