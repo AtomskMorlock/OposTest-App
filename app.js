@@ -524,7 +524,6 @@ function restoreSharedHomeLogoAfterSplash() {
   const homeLogo = appSplashSharedHomeLogo;
   const parent = appSplashSharedHomeLogoOriginalParent;
   const nextSibling = appSplashSharedHomeLogoOriginalNextSibling;
-  const fromRect = homeLogo.getBoundingClientRect();
 
   homeLogo.classList.remove("app-splash-logo-line", "app-splash-home-logo");
   homeLogo.removeAttribute("aria-label");
@@ -543,30 +542,9 @@ function restoreSharedHomeLogoAfterSplash() {
     }
   }
 
-  // Evita un micro-salto visual al cambiar de contenedor:
-  // mantenemos el logo fijado 2 frames y luego soltamos al layout de Home.
+  // Limpia cualquier pin previo; en iOS/Safari fijar temporalmente con
+  // position:fixed puede provocar un salto lateral en el handoff.
   clearSharedLogoViewportPin();
-  if (fromRect && fromRect.width && fromRect.height) {
-    const s = homeLogo.style;
-    s.position = "fixed";
-    s.left = `${fromRect.left}px`;
-    s.top = `${fromRect.top}px`;
-    s.width = `${fromRect.width}px`;
-    s.height = `${fromRect.height}px`;
-    s.margin = "0";
-    s.transform = "none";
-    s.zIndex = "2147483645";
-    s.pointerEvents = "none";
-    s.willChange = "transform";
-    s.transition = "none";
-    appSplashSharedLogoUnpinRaf1 = requestAnimationFrame(() => {
-      appSplashSharedLogoUnpinRaf1 = null;
-      appSplashSharedLogoUnpinRaf2 = requestAnimationFrame(() => {
-        appSplashSharedLogoUnpinRaf2 = null;
-        clearSharedLogoViewportPin();
-      });
-    });
-  }
 
   appSplashUsesSharedHomeLogo = false;
   appSplashPendingHomeLogoContinuity = true;
