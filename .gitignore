@@ -3,3 +3,6 @@
 *.bak
 *.experimentos
 *Copi*
+node_modules/
+playwright-report/
+test-results/

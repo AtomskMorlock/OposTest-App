@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>...</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.svg?v=20260218c" type="image/svg+xml">
   <style>
     body { font-family: Arial, sans-serif; padding: 12px 10px 12px; background: var(--bg); min-height: 100vh; min-height: 100dvh; }
     h1, h2, h3, h4 { margin: 10px 0; }
@@ -278,18 +278,108 @@
 
 <!-- IMPORTAR -->
 <div id="import-container" class="card" style="display:none">
-  <h2>Importar preguntas</h2>
-  <p class="small">Formato por bloques separados por <strong>---</strong>. Campos: tema, bloque, fuente, pregunta, A/B/C/D, correcta, explicacion.</p>
+  <h2 id="import-title">Importar preguntas</h2>
 
-  <textarea id="import-textarea" rows="14" placeholder="Pega aquí..."></textarea>
+  <div id="import-batch-section">
+    <p class="small">
+      Pídele a tu IA de confianza que genere las preguntas con este formato y pégalas aquí.
+      Si te devuelve varias preguntas, deben ir separadas por comas.
+      <br>1. Copia y pega este prompt en tu IA.
+      <br>2. Copia y pega en tu IA el temario (listado de bloques y temas).
+      <br>3. Copia y pega en tu IA el material sobre el que quieres que genere preguntas, o bien las preguntas que ya tengas para que las convierta al formato de esta app.
+      <br><br>Consejo: a veces la IA “alucina” e inventa cosas que no estaban en el material de entrada.
+      Te recomiendo trabajar en bloques pequeños de 10/20 preguntas y, cuando lleves unas 50, abrir una conversación nueva y repetir el proceso.
+      Además, conviene pedirle que revise que ha mantenido un criterio verbatim y no ha inventado nada que no le hayas pedido.
+      Y por último, nunca está de más hacer una revisión visual rápida.
+    </p>
 
-  <div class="row">
-    <button id="btn-import-questions">Importar</button>
-    <button id="btn-clear-import" class="secondary">Vaciar cuadro</button>
+    <div id="import-template-box" class="import-template-box is-collapsed">
+      <div class="import-template-head">
+        <button id="btn-toggle-import-template" class="import-template-toggle" type="button" aria-expanded="false">PROMPT para IA</button>
+        <button id="btn-copy-import-template" class="import-template-copy" title="Copiar prompt" aria-label="Copiar prompt">⧉</button>
+      </div>
+      <pre id="import-json-template" class="import-json-template" hidden>Genera preguntas tipo test en JSON para mi app con estas reglas estrictas:
+- Devuelve SOLO objetos JSON, sin texto extra.
+- Si hay varias preguntas, sepáralas con comas.
+- Cada pregunta debe tener exactamente estas claves.
+- Regla de respuesta_correcta: 0=A, 1=B, 2=C, 3=D.
+- No incluyas los campos "id" ni "fuente": los asigna automáticamente la app.
+- Después de esta plantilla, pídeme que te pase el temario completo.
+- Cuando ya tengas el temario, pídeme el material:
+  - Puede ser texto sobre una materia para que generes preguntas.
+  - O pueden ser preguntas ya hechas en otro formato para que las conviertas a este formato.
+
+Plantilla exacta:
+{
+  "tema": "Número y nombre exacto del tema al que corresponde",
+  "bloque": "Bloque X. Nombre completo del bloque al que corresponde",
+  "pregunta": "Texto de la pregunta",
+  "opciones": [
+    "Opción A",
+    "Opción B",
+    "Opción C",
+    "Opción D"
+  ],
+  "respuesta_correcta": 0,
+  "explicacion": "Explicación breve de la respuesta correcta."
+}</pre>
+    </div>
+
+    <textarea id="import-textarea" rows="14" placeholder="Pega aquí..."></textarea>
+
+    <div class="row">
+      <button id="btn-import-questions">Importar</button>
+      <button id="btn-clear-import" class="secondary">Vaciar cuadro</button>
+    </div>
+  </div>
+
+  <div id="import-manual-section">
+    <div id="import-manual-card" class="card import-manual-card">
+    <div class="import-manual-grid">
+      <label>ID
+        <input id="manual-id" type="text" readonly>
+      </label>
+      <label>Bloque
+        <select id="manual-bloque"></select>
+      </label>
+      <label>Tema
+        <select id="manual-tema"></select>
+      </label>
+      <label class="full">Pregunta
+        <textarea id="manual-pregunta" rows="3" placeholder="Texto de la pregunta"></textarea>
+      </label>
+      <label>Respuesta A
+        <input id="manual-op-a" type="text" placeholder="Opción A">
+      </label>
+      <label>Respuesta B
+        <input id="manual-op-b" type="text" placeholder="Opción B">
+      </label>
+      <label>Respuesta C
+        <input id="manual-op-c" type="text" placeholder="Opción C">
+      </label>
+      <label>Respuesta D
+        <input id="manual-op-d" type="text" placeholder="Opción D">
+      </label>
+      <label>Respuesta correcta
+        <select id="manual-correcta">
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+        </select>
+      </label>
+      <label class="full">Explicación
+        <textarea id="manual-explicacion" rows="3" placeholder="Explicación breve de la respuesta correcta"></textarea>
+      </label>
+    </div>
+    <div class="row">
+      <button id="btn-manual-add-question" class="secondary">Añadir pregunta a la pool</button>
+    </div>
+    </div>
   </div>
 
   <div class="row">
-    <button id="btn-clear-added" class="danger">Vaciar añadidas</button>
+    <button id="btn-clear-added" class="danger">Eliminar añadidas</button>
     <button id="btn-back-from-import" class="secondary">Volver</button>
   </div>
 

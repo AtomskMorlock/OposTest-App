@@ -1,3 +1,4 @@
+0.4.0 - Rediseño completo de Importar preguntas: modos Manual/Conjunto separados, prompt IA copiable y expandible, validación de formato reforzada, IDs automáticos por origen (Usuario.Manual / Usuario.Conjunto), fuente automática por origen y mejoras de navegación/UX en importación.
 0.3.1 - ...
 0.3.0 - Nuevos modos Supervivencia y Contrarreloj mejorados, resultados arcade simplificados, lectura en voz alta integrada en pausa, ajustes de modales/colores en modo oscuro y mejoras de layout/flujo en Home y tests.
 0.2.2 - Velocidad media por pregunta

@@ -247,6 +247,11 @@ let currentShuffledOptions = [];
 let lastSelectedText = null;
 let lastCorrectText = null;
 let homeConfigOpenTimer = null;
+let homeVoiceCloseTimer = null;
+let homeConfigCloseTimer = null;
+let homeStartCloseTimer = null;
+let importBackHandler = null;
+let importScreenMode = "batch";
 
 // =======================
 // DOM (IDs del HTML que has pegado)
@@ -308,6 +313,24 @@ const btnImportQuestions = document.getElementById("btn-import-questions");
 const btnClearImport = document.getElementById("btn-clear-import");
 const btnClearAdded = document.getElementById("btn-clear-added");
 const btnBackFromImport = document.getElementById("btn-back-from-import");
+const btnCopyImportTemplate = document.getElementById("btn-copy-import-template");
+const btnToggleImportTemplate = document.getElementById("btn-toggle-import-template");
+const importTitle = document.getElementById("import-title");
+const importBatchSection = document.getElementById("import-batch-section");
+const importManualSection = document.getElementById("import-manual-section");
+const importTemplateBox = document.getElementById("import-template-box");
+const importJsonTemplate = document.getElementById("import-json-template");
+const manualIdInput = document.getElementById("manual-id");
+const manualBloqueInput = document.getElementById("manual-bloque");
+const manualTemaInput = document.getElementById("manual-tema");
+const manualPreguntaInput = document.getElementById("manual-pregunta");
+const manualOpAInput = document.getElementById("manual-op-a");
+const manualOpBInput = document.getElementById("manual-op-b");
+const manualOpCInput = document.getElementById("manual-op-c");
+const manualOpDInput = document.getElementById("manual-op-d");
+const manualCorrectaSelect = document.getElementById("manual-correcta");
+const manualExplicacionInput = document.getElementById("manual-explicacion");
+const btnManualAddQuestion = document.getElementById("btn-manual-add-question");
 
 const resultsText = document.getElementById("results-text");
 const statsContent = document.getElementById("stats-content");
@@ -492,6 +515,8 @@ function flashElementPress(el) {
 
 function flashButtonPress(btn) {
   if (!(btn instanceof HTMLElement) || btn.disabled) return;
+  const cs = getComputedStyle(btn);
+  if (Number(cs.opacity) <= 0.01) return;
   const prev = buttonPressTimers.get(btn);
   if (prev) clearTimeout(prev);
   btn.classList.remove("btn-press-flash");
@@ -519,6 +544,9 @@ function flashButtonPress(btn) {
   } else if (btn.id === "home-btn-review") {
     const homeReviewRow = document.getElementById("home-review-row");
     flashElementPress(homeReviewRow);
+  } else if (btn.id === "home-btn-voice") {
+    const homeVoiceRow = document.getElementById("home-voice-row");
+    flashElementPress(homeVoiceRow);
   }
 }
 
@@ -1720,11 +1748,19 @@ function applyDeletedFilter() {
 }
 
 function refreshDbCountPill() {
-  const extraCount = loadExtraQuestions().length;
-  if (extraCount > 0) {
+  const extra = loadExtraQuestions();
+  const baseIdSet = new Set(
+    (Array.isArray(questionsBase) ? questionsBase : []).map(q => String(q.id))
+  );
+  // "Añadidas" solo cuenta preguntas nuevas (ID no existente en base).
+  const addedCount = extra.reduce((acc, q) => {
+    return acc + (baseIdSet.has(String(q?.id)) ? 0 : 1);
+  }, 0);
+
+  if (addedCount > 0) {
     dbCountPill.textContent =
       `Preguntas en el banco: ${questions.length} ` +
-      `(base ${questionsBase.length} + añadidas ${extraCount})`;
+      `(base ${questionsBase.length} + añadidas ${addedCount})`;
     return;
   }
   dbCountPill.textContent = `Preguntas en el banco: ${questions.length}`;
@@ -1758,6 +1794,12 @@ function hideAll() {
   reviewContainer.style.display = "none";
   statsContainer.style.display = "none";
   importContainer.style.display = "none";
+}
+
+function isElementShown(el) {
+  if (!el) return false;
+  const cs = window.getComputedStyle(el);
+  return cs.display !== "none" && cs.visibility !== "hidden";
 }
 
 function ensureHomeStarsLayer() {
@@ -1844,6 +1886,10 @@ function buildExplanationText(q) {
 }
 
 function openHomeStartPanel() {
+  if (homeStartCloseTimer) {
+    clearTimeout(homeStartCloseTimer);
+    homeStartCloseTimer = null;
+  }
   if (homeConfigOpenTimer) {
     clearTimeout(homeConfigOpenTimer);
     homeConfigOpenTimer = null;
@@ -1856,6 +1902,7 @@ function openHomeStartPanel() {
   const row = document.getElementById("main-primary-row");
   const panel = document.getElementById("home-start-panel");
   if (!row || !panel) return;
+  row.classList.remove("is-start-closing");
   const fromPx = 56;
   const toPx = Math.max(fromPx, panel.scrollHeight + 56);
   applyHomeExpandTiming(row, fromPx, toPx);
@@ -1866,6 +1913,10 @@ function openHomeStartPanel() {
 }
 
 function closeHomeStartPanel() {
+  if (homeStartCloseTimer) {
+    clearTimeout(homeStartCloseTimer);
+    homeStartCloseTimer = null;
+  }
   closeHomeQuickPanel();
   closeHomeExamPanel();
   closeHomeClockPanel();
@@ -1873,12 +1924,17 @@ function closeHomeStartPanel() {
   const row = document.getElementById("main-primary-row");
   const panel = document.getElementById("home-start-panel");
   if (!row || !panel) return;
+  row.classList.add("is-start-closing");
   const fromPx = Math.max(56, panel.scrollHeight + 56);
   const toPx = 56;
   applyHomeExpandTiming(row, fromPx, toPx);
   applyHomeExpandTiming(panel, fromPx, toPx);
   row.classList.remove("is-start-open");
   panel.setAttribute("aria-hidden", "true");
+  homeStartCloseTimer = setTimeout(() => {
+    row.classList.remove("is-start-closing");
+    homeStartCloseTimer = null;
+  }, 340);
 }
 
 function openHomeQuickPanel() {
@@ -2042,11 +2098,16 @@ function openHomeConfigPanel(instant = false) {
     clearTimeout(homeConfigOpenTimer);
     homeConfigOpenTimer = null;
   }
+  if (homeConfigCloseTimer) {
+    clearTimeout(homeConfigCloseTimer);
+    homeConfigCloseTimer = null;
+  }
   closeHomeStartPanel();
   closeHomeVoicePanel();
   const row = document.getElementById("main-config-row");
   const panel = document.getElementById("home-config-panel");
   if (!row || !panel) return;
+  row.classList.remove("is-config-closing");
   const fromPx = 56;
   const toPx = Math.max(fromPx, panel.scrollHeight + 56);
   applyHomeExpandTiming(row, fromPx, toPx);
@@ -2067,16 +2128,31 @@ function closeHomeConfigPanel() {
     clearTimeout(homeConfigOpenTimer);
     homeConfigOpenTimer = null;
   }
-  closeHomeVoicePanel();
+  if (homeConfigCloseTimer) {
+    clearTimeout(homeConfigCloseTimer);
+    homeConfigCloseTimer = null;
+  }
+  closeHomeVoicePanel(true);
   const row = document.getElementById("main-config-row");
   const panel = document.getElementById("home-config-panel");
   if (!row || !panel) return;
+  const wasOpen = row.classList.contains("is-config-open");
+  const wasClosing = row.classList.contains("is-config-closing");
+  if (!wasOpen && !wasClosing) {
+    panel.setAttribute("aria-hidden", "true");
+    return;
+  }
   const fromPx = Math.max(56, panel.scrollHeight + 56);
   const toPx = 56;
   applyHomeExpandTiming(row, fromPx, toPx);
   applyHomeExpandTiming(panel, fromPx, toPx);
+  row.classList.add("is-config-closing");
   row.classList.remove("is-config-open");
   panel.setAttribute("aria-hidden", "true");
+  homeConfigCloseTimer = setTimeout(() => {
+    row.classList.remove("is-config-closing");
+    homeConfigCloseTimer = null;
+  }, 340);
 }
 
 function openHomeVoicePanel() {
@@ -2084,21 +2160,43 @@ function openHomeVoicePanel() {
   const row = document.getElementById("home-voice-row");
   const panel = document.getElementById("home-voice-panel");
   if (!row || !panel) return;
+  if (homeVoiceCloseTimer) {
+    clearTimeout(homeVoiceCloseTimer);
+    homeVoiceCloseTimer = null;
+  }
+  // Primero renderizamos contenido y estado estando cerrado para que
+  // al abrir se apliquen correctamente las transiciones en cascada.
+  ttsPopulateVoiceButtons();
+  ttsApplyUIState();
+  row.classList.remove("is-voice-closing");
   if (configRow) configRow.classList.add("is-voice-open");
   row.classList.add("is-voice-open");
   panel.setAttribute("aria-hidden", "false");
-  ttsPopulateVoiceButtons();
-  ttsApplyUIState();
 }
 
-function closeHomeVoicePanel() {
+function closeHomeVoicePanel(immediate = false) {
   const configRow = document.getElementById("main-config-row");
   const row = document.getElementById("home-voice-row");
   const panel = document.getElementById("home-voice-panel");
   if (!row || !panel) return;
-  if (configRow) configRow.classList.remove("is-voice-open");
+  if (homeVoiceCloseTimer) {
+    clearTimeout(homeVoiceCloseTimer);
+    homeVoiceCloseTimer = null;
+  }
+  const wasOpen = row.classList.contains("is-voice-open");
+  if (wasOpen) row.classList.add("is-voice-closing");
   row.classList.remove("is-voice-open");
   panel.setAttribute("aria-hidden", "true");
+  if (wasOpen && !immediate) {
+    homeVoiceCloseTimer = setTimeout(() => {
+      if (configRow) configRow.classList.remove("is-voice-open");
+      row.classList.remove("is-voice-closing");
+      homeVoiceCloseTimer = null;
+    }, 340);
+  } else {
+    if (configRow) configRow.classList.remove("is-voice-open");
+    row.classList.remove("is-voice-closing");
+  }
 }
 
 // =======================
@@ -2147,7 +2245,7 @@ function showMainMenu() {
     rowPaused.innerHTML = paused
       ? `
         <button id="btn-continue-paused" class="secondary">Continuar</button>
-        <button id="btn-cancel-paused" class="secondary">Cancelar test pausado</button>
+        <button id="btn-cancel-paused" class="secondary">Descartar</button>
       `
       : "";
   }
@@ -2171,8 +2269,9 @@ function showMainMenu() {
         <div id="home-start-panel" class="home-start-panel" aria-hidden="true">
           <div class="home-start-panel-title">Iniciar test</div>
           ${paused ? `
-            <div class="row home-start-row single">
+            <div class="row home-start-row double paused-actions">
               <button id="home-btn-continue-paused" class="secondary home-start-option">Continuar</button>
+              <button id="home-btn-cancel-paused" class="secondary home-start-option">Descartar</button>
             </div>
           ` : ""}
           <div class="row home-start-row single" id="home-quick-row">
@@ -2225,11 +2324,6 @@ function showMainMenu() {
           <div class="row home-start-row single">
             <button id="home-btn-survival" class="secondary home-start-option">Supervivencia 💀 🔥 ${survivalBest}</button>
           </div>
-          ${paused ? `
-            <div class="row home-start-row single">
-              <button id="home-btn-cancel-paused" class="secondary home-start-option">Cancelar test pausado</button>
-            </div>
-          ` : ""}
         </div>
       </div>
       <div class="row" id="main-config-row">
@@ -2248,9 +2342,6 @@ function showMainMenu() {
                 <label class="small">Tono
                   <input id="home-tts-pitch" type="range" min="0.8" max="1.2" step="0.1" />
                 </label>
-              </div>
-              <div class="row home-voice-actions single">
-                <button id="home-btn-close-voice" class="secondary">Cerrar</button>
               </div>
             </div>
           </div>
@@ -2438,9 +2529,16 @@ function showMainMenu() {
     showStatsScreen();
   };
   const homeBtnVoice = document.getElementById("home-btn-voice");
-  if (homeBtnVoice) homeBtnVoice.onclick = () => openHomeVoicePanel();
-  const homeBtnCloseVoice = document.getElementById("home-btn-close-voice");
-  if (homeBtnCloseVoice) homeBtnCloseVoice.onclick = () => closeHomeVoicePanel();
+  if (homeBtnVoice) homeBtnVoice.onclick = () => {
+    scheduleHomeAction(() => {
+      const row = document.getElementById("home-voice-row");
+      if (row && row.classList.contains("is-voice-open")) {
+        closeHomeVoicePanel();
+        return;
+      }
+      openHomeVoicePanel();
+    });
+  };
   const homeTtsRate = document.getElementById("home-tts-rate");
   if (homeTtsRate) {
     homeTtsRate.oninput = () => {
@@ -2814,9 +2912,38 @@ function showStatsScreen() {
   };
 }
 
-function showImportScreen() {
+function setImportScreenMode(modeValue) {
+  const mode = modeValue === "manual" ? "manual" : "batch";
+  importScreenMode = mode;
+  if (importBatchSection) importBatchSection.style.display = mode === "batch" ? "block" : "none";
+  if (importManualSection) importManualSection.style.display = mode === "manual" ? "block" : "none";
+  if (importTitle) importTitle.textContent = mode === "manual" ? "Importar preguntas · Manual" : "Importar preguntas · Conjunto";
+}
+
+function showImportScreen(modeValue = "batch", backHandler = null) {
+  setImportScreenMode(modeValue);
+  if (typeof backHandler === "function") {
+    importBackHandler = backHandler;
+  } else if (isElementShown(testMenu) && mode === "bank") {
+    importBackHandler = showQuestionBank;
+  } else if (isElementShown(configContainer)) {
+    importBackHandler = showConfigScreen;
+  } else if (isElementShown(voiceSettingsContainer)) {
+    importBackHandler = showVoiceSettingsScreen;
+  } else {
+    importBackHandler = showMainMenu;
+  }
   hideAll();
   importContainer.style.display = "block";
+  if (importScreenMode === "batch") setImportTemplateExpanded(false);
+  if (importScreenMode === "manual") refreshManualBloqueTemaSelectors();
+  clearManualImportForm();
+}
+
+function backFromImportScreen() {
+  const goBack = typeof importBackHandler === "function" ? importBackHandler : showMainMenu;
+  importBackHandler = null;
+  goBack();
 }
 
 // =======================
@@ -4806,7 +4933,7 @@ function parseImportBlocks(raw) {
       }
     });
 
-    const required = ["tema", "bloque", "fuente", "pregunta", "a", "b", "c", "d", "correcta", "explicacion"];
+    const required = ["tema", "bloque", "pregunta", "a", "b", "c", "d", "correcta", "explicacion"];
     const missing = required.filter(k => !obj[k] || String(obj[k]).trim() === "");
     if (missing.length) {
       errors.push(`Bloque #${idx + 1}: faltan ${missing.join(", ")}`);
@@ -4822,7 +4949,6 @@ function parseImportBlocks(raw) {
     parsed.push({
       tema: obj.tema.trim(),
       bloque: obj.bloque.trim(),
-      fuente: obj.fuente.trim(),
       pregunta: obj.pregunta.trim(),
       opciones: [obj.a, obj.b, obj.c, obj.d],
       respuesta_correcta: corrIdx,
@@ -4833,15 +4959,331 @@ function parseImportBlocks(raw) {
   return { parsed, errors };
 }
 
+function parseImportJsonQuestions(raw) {
+  const parsed = [];
+  const errors = [];
+  const text = String(raw || "").trim();
+  if (!text) return { parsed, errors: ["JSON vacío."] };
+
+  const attempts = [];
+  const pushAttempt = v => {
+    const t = String(v || "").trim();
+    if (!t) return;
+    if (!attempts.includes(t)) attempts.push(t);
+  };
+
+  // Intento directo
+  pushAttempt(text);
+
+  // Sin coma final
+  const noTrailingComma = text.replace(/,\s*$/, "").trim();
+  pushAttempt(noTrailingComma);
+
+  // Soporta múltiples objetos separados por coma sin corchetes:
+  // {...}, {...}
+  const looksObjectListWithoutBrackets =
+    !/^\s*\[/.test(noTrailingComma) &&
+    /^\s*\{[\s\S]*\}\s*(,\s*\{[\s\S]*\}\s*)*$/.test(noTrailingComma);
+  if (looksObjectListWithoutBrackets) {
+    pushAttempt(`[${noTrailingComma}]`);
+  }
+
+  let data = null;
+  let parsedOk = false;
+  for (const candidate of attempts) {
+    try {
+      data = JSON.parse(candidate);
+      parsedOk = true;
+      break;
+    } catch {
+      // siguiente intento
+    }
+  }
+  if (!parsedOk) {
+    return { parsed, errors: ["JSON inválido."] };
+  }
+
+  const isQuestionObject =
+    data &&
+    typeof data === "object" &&
+    !Array.isArray(data) &&
+    ("pregunta" in data || "opciones" in data || "respuesta_correcta" in data || "correcta" in data);
+
+  const list = Array.isArray(data)
+    ? data
+    : (Array.isArray(data?.preguntas)
+      ? data.preguntas
+      : (Array.isArray(data?.questions)
+        ? data.questions
+        : (isQuestionObject ? [data] : null)));
+
+  if (!Array.isArray(list)) {
+    return { parsed, errors: ["El JSON no contiene un array de preguntas."] };
+  }
+
+  list.forEach((item, idx) => {
+    if (!item || typeof item !== "object") {
+      errors.push(`Ítem #${idx + 1}: formato inválido.`);
+      return;
+    }
+    const tema = String(item.tema || "").trim();
+    const bloque = String(item.bloque || "").trim();
+    const pregunta = String(item.pregunta || "").trim();
+    const explicacion = String(item.explicacion || "").trim();
+
+    let opciones = [];
+    if (Array.isArray(item.opciones) && item.opciones.length >= 4) {
+      opciones = item.opciones.slice(0, 4).map(v => String(v ?? "").trim());
+    } else {
+      opciones = [item.a, item.b, item.c, item.d].map(v => String(v ?? "").trim());
+    }
+
+    let corrIdx;
+    if (Number.isInteger(item.respuesta_correcta) && item.respuesta_correcta >= 0 && item.respuesta_correcta <= 3) {
+      corrIdx = item.respuesta_correcta;
+    } else {
+      corrIdx = normalizeCorrectaToIndex(item.correcta ?? item.respuestaCorrecta ?? "");
+    }
+
+    const missing = [];
+    if (!tema) missing.push("tema");
+    if (!bloque) missing.push("bloque");
+    if (!pregunta) missing.push("pregunta");
+    if (!explicacion) missing.push("explicacion");
+    if (opciones.some(o => !o)) missing.push("opciones A/B/C/D");
+    if (corrIdx === undefined) missing.push("respuesta correcta");
+    if (missing.length) {
+      errors.push(`Ítem #${idx + 1}: faltan/son inválidos: ${missing.join(", ")}.`);
+      return;
+    }
+
+    parsed.push({
+      tema,
+      bloque,
+      pregunta,
+      opciones,
+      respuesta_correcta: corrIdx,
+      explicacion
+    });
+  });
+
+  return { parsed, errors };
+}
+
+function appendImportedQuestions(parsed, importKind = "conjunto") {
+  mergeQuestions();
+  applyDeletedFilter();
+
+  const existingIds = getAllKnownIdsSet();
+  let nextConjuntoSeq = 1;
+  while (existingIds.has(`Usuario.Conjunto.${String(nextConjuntoSeq).padStart(4, "0")}`)) nextConjuntoSeq++;
+  const extra = loadExtraQuestions();
+  let added = 0;
+  const sourceLabel = importKind === "manual" ? "Usuario Manual" : "Usuario Conjunto";
+  const idPrefix = importKind === "manual" ? "Usuario.Manual" : "Usuario.Conjunto";
+
+  parsed.forEach((q) => {
+    let idStr = `${idPrefix}.${String(nextConjuntoSeq).padStart(4, "0")}`;
+    nextConjuntoSeq++;
+    while (existingIds.has(idStr)) {
+      idStr = `${idPrefix}.${String(nextConjuntoSeq).padStart(4, "0")}`;
+      nextConjuntoSeq++;
+    }
+    existingIds.add(idStr);
+    extra.push({ ...(q || {}), id: idStr, fuente: sourceLabel });
+    added++;
+  });
+
+  saveExtraQuestions(extra);
+  mergeQuestions();
+  applyDeletedFilter();
+  refreshDbCountPill();
+  return added;
+}
+
+function getAllKnownIdsSet() {
+  const used = new Set();
+  const collect = v => {
+    const s = String(v || "").trim();
+    if (s) used.add(s);
+  };
+  asArray(questionsBase).forEach(q => collect(q?.id));
+  asArray(loadExtraQuestions()).forEach(q => collect(q?.id));
+  asArray(lsGetJSON(LS_DELETED_IDS, [])).forEach(collect);
+  asArray(lsGetJSON(LS_PURGED_IDS, [])).forEach(collect);
+  return used;
+}
+
+function getNextUserIdByPrefix(prefix) {
+  const used = getAllKnownIdsSet();
+  let n = 1;
+  while (true) {
+    const candidate = `${prefix}.${String(n).padStart(4, "0")}`;
+    if (!used.has(candidate)) return candidate;
+    n++;
+  }
+}
+
+function refreshManualTemaOptionsForBloque(bloque, preferredTema = "", grouped = null) {
+  if (!manualTemaInput) return;
+  const groupedData = Array.isArray(grouped) ? grouped : groupTemasByBloque();
+  const blockData = groupedData.find(g => g.bloque === bloque);
+  const temas = Array.isArray(blockData?.temas) ? blockData.temas : [];
+
+  manualTemaInput.innerHTML = "";
+  if (!temas.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Sin temas disponibles";
+    manualTemaInput.appendChild(opt);
+    manualTemaInput.value = "";
+    return;
+  }
+
+  temas.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = String(t);
+    opt.textContent = String(t);
+    manualTemaInput.appendChild(opt);
+  });
+
+  const hasPreferred = temas.includes(preferredTema);
+  manualTemaInput.value = hasPreferred ? preferredTema : String(temas[0]);
+}
+
+function refreshManualBloqueTemaSelectors(preferredBloque = "", preferredTema = "") {
+  if (!manualBloqueInput || !manualTemaInput) return;
+  const grouped = groupTemasByBloque();
+  const currentBloque = preferredBloque || String(manualBloqueInput.value || "");
+  const currentTema = preferredTema || String(manualTemaInput.value || "");
+
+  manualBloqueInput.innerHTML = "";
+  if (!grouped.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Sin bloques disponibles";
+    manualBloqueInput.appendChild(opt);
+    manualBloqueInput.value = "";
+    refreshManualTemaOptionsForBloque("", "", grouped);
+    return;
+  }
+
+  grouped.forEach(({ bloque }) => {
+    const opt = document.createElement("option");
+    opt.value = String(bloque);
+    opt.textContent = String(bloque);
+    manualBloqueInput.appendChild(opt);
+  });
+
+  const hasPreferredBlock = grouped.some(g => g.bloque === currentBloque);
+  const selectedBloque = hasPreferredBlock ? currentBloque : String(grouped[0].bloque);
+  manualBloqueInput.value = selectedBloque;
+  refreshManualTemaOptionsForBloque(selectedBloque, currentTema, grouped);
+}
+
+function clearManualImportForm() {
+  if (manualIdInput) manualIdInput.value = getNextUserIdByPrefix("Usuario.Manual");
+  if (manualPreguntaInput) manualPreguntaInput.value = "";
+  if (manualOpAInput) manualOpAInput.value = "";
+  if (manualOpBInput) manualOpBInput.value = "";
+  if (manualOpCInput) manualOpCInput.value = "";
+  if (manualOpDInput) manualOpDInput.value = "";
+  if (manualCorrectaSelect) manualCorrectaSelect.value = "A";
+  if (manualExplicacionInput) manualExplicacionInput.value = "";
+}
+
+function addManualQuestionToPool() {
+  importStatus.innerHTML = "";
+
+  const bloque = String(manualBloqueInput?.value || "").trim();
+  const tema = String(manualTemaInput?.value || "").trim();
+  const pregunta = String(manualPreguntaInput?.value || "").trim();
+  const opA = String(manualOpAInput?.value || "").trim();
+  const opB = String(manualOpBInput?.value || "").trim();
+  const opC = String(manualOpCInput?.value || "").trim();
+  const opD = String(manualOpDInput?.value || "").trim();
+  const correcta = normalizeCorrectaToIndex(manualCorrectaSelect?.value || "A");
+  const explicacion = String(manualExplicacionInput?.value || "").trim();
+
+  const missing = [];
+  if (!bloque) missing.push("bloque");
+  if (!tema) missing.push("tema");
+  if (!pregunta) missing.push("pregunta");
+  if (!opA) missing.push("respuesta A");
+  if (!opB) missing.push("respuesta B");
+  if (!opC) missing.push("respuesta C");
+  if (!opD) missing.push("respuesta D");
+  if (!explicacion) missing.push("explicación");
+
+  if (missing.length) {
+    const msg = `Faltan campos: ${missing.join(", ")}.`;
+    importStatus.innerHTML = `<div class="small status-error">${escapeHtml(msg)}</div>`;
+    showAlert(`Error de formato:\n${msg}`);
+    return;
+  }
+
+  const manualId = getNextUserIdByPrefix("Usuario.Manual");
+
+  const parsed = [{ tema, bloque, fuente: "Usuario Manual", pregunta, opciones: [opA, opB, opC, opD], respuesta_correcta: correcta, explicacion }];
+  const question = parsed[0];
+
+  mergeQuestions();
+  applyDeletedFilter();
+
+  const existingIds = new Set((questions || []).map(q => String(q?.id)).filter(Boolean));
+  const deletedIds = new Set(asArray(lsGetJSON(LS_DELETED_IDS, [])).map(v => String(v)));
+  const purgedIds = new Set(asArray(lsGetJSON(LS_PURGED_IDS, [])).map(v => String(v)));
+  const extra = loadExtraQuestions();
+
+  if (existingIds.has(manualId) || deletedIds.has(manualId) || purgedIds.has(manualId)) {
+    const msg = `El ID ${manualId} ya existe o está reservado.`;
+    importStatus.innerHTML = `<div class="small status-error">${escapeHtml(msg)}</div>`;
+    showAlert(`Error de formato:\n${msg}`);
+    return;
+  }
+  const finalId = manualId;
+
+  extra.push({ ...question, id: finalId, fuente: "Usuario Manual" });
+  saveExtraQuestions(extra);
+  mergeQuestions();
+  applyDeletedFilter();
+  refreshDbCountPill();
+  clearManualImportForm();
+  importStatus.innerHTML = `<div class="small status-ok">✅ Pregunta añadida a la pool (ID ${escapeHtml(finalId)}).</div>`;
+}
+
 function importQuestionsFromTextarea() {
   importStatus.innerHTML = "";
-  const raw = importTextarea.value || "";
+  const raw = String(importTextarea.value || "");
+  let text = raw.trim();
+  if (!text) {
+    importStatus.innerHTML = `<div class="small status-error">No se encontró ninguna pregunta.</div>`;
+    return;
+  }
 
-  const { parsed, errors } = parseImportBlocks(raw);
+  // Si viene en formato array JSON, quitamos corchetes externos para
+  // estandarizar entrada y evitar errores de pegado al mezclar formatos.
+  if (text.startsWith("[") && text.endsWith("]")) {
+    text = text.slice(1, -1).trim();
+    importTextarea.value = text;
+  }
+  if (!text) {
+    importStatus.innerHTML = `<div class="small status-error">Formato inválido: contenido vacío tras quitar corchetes.</div>`;
+    showAlert("Error de formato: el contenido está vacío.");
+    return;
+  }
+
+  const looksJson = /^[\[{]/.test(text);
+
+  const { parsed, errors } = looksJson
+    ? parseImportJsonQuestions(text)
+    : parseImportBlocks(text);
   if (errors.length) {
+    const msg = errors.slice(0, 6).join("\n");
     importStatus.innerHTML =
       `<div class="small status-error">No se pudo parsear:\n` +
       `${errors.map(e => `<div>${escapeHtml(e)}</div>`).join("")}</div>`;
+    showAlert(`Error de formato. Revisa el contenido:\n${msg}`);
     return;
   }
 
@@ -4849,44 +5291,77 @@ function importQuestionsFromTextarea() {
     importStatus.innerHTML = `<div class="small status-error">No se encontró ninguna pregunta.</div>`;
     return;
   }
-
-  // Asegura estado actualizado
-  mergeQuestions();
-  applyDeletedFilter();
-
-  // ✅ IDs existentes desde el banco actual (strings)
-  const existingIds = new Set((questions || []).map(q => String(q?.id)).filter(Boolean));
-
-  // contador interno numérico (no reutiliza borradas)
-  let nextNum = nextIdNumber();
-
-  // añadimos en extra
-  const extra = loadExtraQuestions();
-  let added = 0;
-
-  parsed.forEach(q => {
-    // busca el siguiente id libre
-    while (existingIds.has(String(nextNum))) nextNum++;
-
-    const idStr = String(nextNum);
-    nextNum++;
-    existingIds.add(idStr);
-
-    const withId = { ...q, id: idStr }; // 🔒 SIEMPRE string
-    extra.push(withId);
-    added++;
-  });
-
-  saveExtraQuestions(extra);
-
-  mergeQuestions();
-  applyDeletedFilter();
-  refreshDbCountPill();
+  const added = appendImportedQuestions(parsed, "conjunto");
 
   importStatus.innerHTML = `<div class="small status-ok">✅ Importadas ${added} preguntas.</div>`;
 
   // ✅ limpiar textarea tras importar
   importTextarea.value = "";
+}
+
+function copyImportTemplateToClipboard() {
+  const text = String(importJsonTemplate?.textContent || "").trim();
+  if (!text) return;
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      importStatus.innerHTML = `<div class="small status-ok">✅ Plantilla copiada al portapapeles.</div>`;
+    })
+    .catch(() => {
+      importStatus.innerHTML = `<div class="small status-error">No se pudo copiar la plantilla.</div>`;
+    });
+}
+
+function setImportTemplateExpanded(expanded) {
+  if (!btnToggleImportTemplate || !importJsonTemplate || !importTemplateBox) return;
+  const isOpen = !!expanded;
+  btnToggleImportTemplate.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  importJsonTemplate.hidden = !isOpen;
+  importTemplateBox.classList.toggle("is-collapsed", !isOpen);
+}
+
+function toggleImportTemplateExpanded() {
+  if (!btnToggleImportTemplate) return;
+  const nowExpanded = btnToggleImportTemplate.getAttribute("aria-expanded") === "true";
+  setImportTemplateExpanded(!nowExpanded);
+}
+
+function importQuestionSetFromFile() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".txt,.json,application/json,text/plain";
+
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    let raw = "";
+    try {
+      raw = await file.text();
+    } catch {
+      showAlert("No se pudo leer el archivo.");
+      return;
+    }
+
+    const text = String(raw || "");
+    const looksJson = /\.json$/i.test(file.name) || /^[\s\r\n]*[\[{]/.test(text);
+    const result = looksJson ? parseImportJsonQuestions(text) : parseImportBlocks(text);
+    const { parsed, errors } = result;
+
+    if (errors.length) {
+      const msg = errors.slice(0, 6).join("\n");
+      showAlert(`No se pudo importar el conjunto:\n${msg}`);
+      return;
+    }
+    if (!parsed.length) {
+      showAlert("El archivo no contiene preguntas válidas.");
+      return;
+    }
+
+    const added = appendImportedQuestions(parsed, "conjunto");
+    showAlert(`Importadas ${added} preguntas desde conjunto.`);
+    showQuestionBank();
+  };
+
+  input.click();
 }
 
 function clearImportTextarea() {
@@ -4908,6 +5383,25 @@ async function clearAddedQuestions() {
   importStatus.innerHTML = `<div class="small status-ok">✅ Preguntas añadidas vaciadas.</div>`;
 }
 
+async function restoreQuestionsToFactory() {
+  const ok = await showConfirm(
+    "¿Restaurar de fábrica el banco de preguntas? Esto deshará ediciones, recuperará eliminadas y quitará añadidas desde la app.",
+    { danger: true }
+  );
+  if (!ok) return;
+
+  localStorage.removeItem(LS_EXTRA_QUESTIONS);
+  lsSetJSON(LS_DELETED_IDS, []);
+  lsSetJSON(LS_PURGED_IDS, []);
+
+  mergeQuestions();
+  applyDeletedFilter();
+  prunePendingGhostIds();
+  refreshDbCountPill();
+
+  showQuestionBank();
+}
+
 // =======================
 // BANCO DE PREGUNTAS (buscar / filtrar / editar / eliminar)
 // =======================
@@ -4923,52 +5417,79 @@ function showQuestionBank() {
     .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
 
   testMenu.innerHTML = `
-    <div class="row" style="justify-content:center;margin-bottom:10px;">
+    <div class="row bank-top-head">
       <div id="bank-db-pill-target"></div>
-    </div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;">
-      <input id="bank-search" type="text" placeholder="Buscar texto..." style="flex:1;max-width:520px;padding:8px;border-radius:10px;border:1px solid var(--border);">
       <button id="bank-back" class="secondary">Volver</button>
     </div>
 
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;">
-      <label>Bloque:
-        <select id="bank-filter-bloque">
-          <option value="">(Todos)</option>
-          ${bloques.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join("")}
-        </select>
-      </label>
-
-      <label>Fuente:
-        <select id="bank-filter-fuente">
-          <option value="">(Todas)</option>
-          ${fuentes.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("")}
-        </select>
-      </label>
-
+    <div id="bank-actions-card" class="card">
+      <div id="bank-import-row" class="bank-import-row">
+        <button id="bank-import-questions" class="secondary">Importar preguntas</button>
+        <div id="bank-import-panel" class="bank-import-panel" aria-hidden="true">
+          <button id="bank-import-manual" class="secondary">Manual</button>
+          <button id="bank-import-batch" class="secondary">Conjunto</button>
+        </div>
+      </div>
+      <div class="row bank-actions-row bank-top-actions-row">
+        <button id="bank-trash" class="secondary">Papelera</button>
+        <button id="bank-restore-factory" class="secondary">RESTAURAR DE FÁBRICA</button>
+      </div>
     </div>
 
-    <div class="row" style="margin:10px 0;justify-content:center;width:100%;">
-      <button id="bank-refresh" class="secondary" style="flex:1;min-width:160px;">Buscar</button>
-      <button id="bank-import-questions" class="secondary" style="flex:1;min-width:160px;">Importar preguntas</button>
-      <button id="bank-export-json" class="secondary" style="flex:1;min-width:200px;">Exportar preguntas (JSON)</button>
-      <button id="bank-trash" class="secondary" style="flex:1;min-width:140px;">Papelera</button>
+    <div id="bank-bloque-filter-card" class="card bank-inline-filter-card">
+      <div id="bank-bloque-filter-title" class="bank-inline-filter-title">Bloque</div>
+      <div id="bank-filter-bloque-wrap" class="row bank-inline-filter-buttons">
+        ${bloques.map(b => `<button type="button" class="success fuente-btn" data-bloque="${escapeHtml(b)}">${escapeHtml(b)}</button>`).join("")}
+      </div>
     </div>
 
-    <div id="bank-results" style="margin-top:12px;"></div>
+    <div id="bank-fuente-filter-card" class="card bank-inline-filter-card">
+      <div id="bank-fuente-filter-title" class="bank-inline-filter-title">Fuente</div>
+      <div id="bank-filter-fuente-wrap" class="row bank-inline-filter-buttons">
+        ${fuentes.map(f => `<button type="button" class="success fuente-btn" data-fuente="${escapeHtml(f)}">${escapeHtml(f)}</button>`).join("")}
+      </div>
+    </div>
+
+    <div id="bank-top-card" class="card">
+      <div class="bank-search-row">
+        <button id="bank-refresh" class="secondary">Buscar</button>
+        <div class="bank-search-input-wrap">
+          <input id="bank-search" type="text" placeholder="Que incluya...">
+          <button type="button" id="bank-search-clear" class="bank-search-clear" aria-label="Limpiar búsqueda">×</button>
+        </div>
+      </div>
+
+      <div class="row bank-search-scope-row" id="bank-search-scope-wrap">
+        <button type="button" id="bank-scope-tema" class="success fuente-btn">Tema</button>
+        <button type="button" id="bank-scope-qa" class="success fuente-btn">Pregunta/Respuestas</button>
+      </div>
+    </div>
+
+    <div id="bank-results"></div>
   `;
 
   document.getElementById("bank-back").onclick = () => {
     showMainMenu();
     openHomeConfigPanel(true);
   };
-  document.getElementById("bank-export-json").onclick = exportQuestionsJSON;
   document.getElementById("bank-import-questions").onclick = () => {
+    const row = document.getElementById("bank-import-row");
+    const panel = document.getElementById("bank-import-panel");
+    if (!row || !panel) return;
+    const open = !row.classList.contains("is-open");
+    row.classList.toggle("is-open", open);
+    panel.setAttribute("aria-hidden", open ? "false" : "true");
+  };
+  document.getElementById("bank-import-manual").onclick = () => {
     clearImportTextarea();
-    showImportScreen();
+    showImportScreen("manual", showQuestionBank);
+  };
+  document.getElementById("bank-import-batch").onclick = () => {
+    clearImportTextarea();
+    showImportScreen("batch", showQuestionBank);
   };
   document.getElementById("bank-trash").onclick = () => showTrashScreen();
+  document.getElementById("bank-restore-factory").onclick = () => restoreQuestionsToFactory();
 
   const bankDbPillTarget = document.getElementById("bank-db-pill-target");
   if (bankDbPillTarget && dbCountPill) {
@@ -4979,20 +5500,40 @@ function showQuestionBank() {
 
   const runSearch = () => {
     const term = (document.getElementById("bank-search").value || "").trim().toLowerCase();
-    const fb = document.getElementById("bank-filter-bloque").value;
-    const ff = document.getElementById("bank-filter-fuente").value;
+    const searchTemaOn = document.getElementById("bank-scope-tema")?.classList.contains("success");
+    const searchQaOn = document.getElementById("bank-scope-qa")?.classList.contains("success");
+    const fb = Array.from(document.querySelectorAll('#bank-filter-bloque-wrap .fuente-btn.success'))
+      .map(btn => String(btn.getAttribute("data-bloque") || "").trim())
+      .filter(Boolean);
+    const ff = Array.from(document.querySelectorAll('#bank-filter-fuente-wrap .fuente-btn.success'))
+      .map(btn => String(btn.getAttribute("data-fuente") || "").trim())
+      .filter(Boolean);
     const fm = "";
 
     let res = [...questions];
 
-    if (fb) res = res.filter(q => (q.bloque || "Sin bloque") === fb);
-    if (ff) res = res.filter(q => (q.fuente || "Sin fuente") === ff);
+    if (fb.length > 0) {
+      const fbSet = new Set(fb);
+      res = res.filter(q => fbSet.has(q.bloque || "Sin bloque"));
+    } else {
+      res = [];
+    }
+    if (ff.length > 0) {
+      const ffSet = new Set(ff);
+      res = res.filter(q => ffSet.has(q.fuente || "Sin fuente"));
+    } else {
+      res = [];
+    }
 
     if (term) {
+      if (!searchTemaOn && !searchQaOn) {
+        renderBankResults([]);
+        return;
+      }
       res = res.filter(q => {
         const hay = [
-          q.tema, q.bloque, q.fuente, q.modelo,
-          q.pregunta, ...(q.opciones || []), q.explicacion
+          ...(searchTemaOn ? [q.tema] : []),
+          ...(searchQaOn ? [q.pregunta, ...(q.opciones || [])] : [])
         ].join(" ").toLowerCase();
         return hay.includes(term);
       });
@@ -5002,10 +5543,76 @@ function showQuestionBank() {
   };
 
   document.getElementById("bank-refresh").onclick = runSearch;
-  document.getElementById("bank-search").addEventListener("keydown", (e) => {
+  const bankSearchInput = document.getElementById("bank-search");
+  const bankSearchClearBtn = document.getElementById("bank-search-clear");
+  const syncBankSearchClear = () => {
+    if (!bankSearchInput || !bankSearchClearBtn) return;
+    const hasText = !!String(bankSearchInput.value || "").trim();
+    bankSearchClearBtn.classList.toggle("is-visible", hasText);
+  };
+  bankSearchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") runSearch();
   });
+  bankSearchInput.addEventListener("input", syncBankSearchClear);
+  if (bankSearchClearBtn) {
+    bankSearchClearBtn.onclick = () => {
+      bankSearchInput.value = "";
+      syncBankSearchClear();
+      bankSearchInput.focus();
+      runSearch();
+    };
+  }
+  const setupScopeToggle = (id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.onclick = () => {
+      const isActive = btn.classList.contains("success");
+      btn.className = isActive ? "secondary fuente-btn" : "success fuente-btn";
+      runSearch();
+    };
+  };
+  setupScopeToggle("bank-scope-tema");
+  setupScopeToggle("bank-scope-qa");
+  document.querySelectorAll("#bank-filter-bloque-wrap .fuente-btn").forEach(btn => {
+    btn.onclick = () => {
+      const isActive = btn.classList.contains("success");
+      btn.className = isActive ? "secondary fuente-btn" : "success fuente-btn";
+      runSearch();
+    };
+  });
+  document.querySelectorAll("#bank-filter-fuente-wrap .fuente-btn").forEach(btn => {
+    btn.onclick = () => {
+      const isActive = btn.classList.contains("success");
+      btn.className = isActive ? "secondary fuente-btn" : "success fuente-btn";
+      runSearch();
+    };
+  });
 
+  const setupBankFilterCollapse = (cardId, titleId) => {
+    const card = document.getElementById(cardId);
+    const title = document.getElementById(titleId);
+    if (!card || !title) return;
+    title.setAttribute("role", "button");
+    title.setAttribute("tabindex", "0");
+    card.classList.add("is-collapsed");
+    title.setAttribute("aria-expanded", "false");
+    const toggle = () => {
+      const collapsed = !card.classList.contains("is-collapsed");
+      card.classList.toggle("is-collapsed", collapsed);
+      title.setAttribute("aria-expanded", String(!collapsed));
+      title.blur();
+    };
+    title.onclick = toggle;
+    title.onkeydown = (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggle();
+    };
+  };
+  setupBankFilterCollapse("bank-bloque-filter-card", "bank-bloque-filter-title");
+  setupBankFilterCollapse("bank-fuente-filter-card", "bank-fuente-filter-title");
+
+  syncBankSearchClear();
   runSearch();
 }
 
@@ -5018,21 +5625,22 @@ function renderBankResults(list) {
     return;
   }
 
-  const stats = getStats();
-
   box.innerHTML = list.map(q => {
-    const seen = stats[q.id]?.seen ?? 0;
     return `
       <div class="card" style="padding:12px;">
-        <div style="font-weight:700;margin-bottom:6px;">#${q.id} · ${escapeHtml(q.bloque || "")} · ${escapeHtml(q.tema || "")}</div>
-        <div class="small" style="margin-bottom:6px;"><strong>Fuente:</strong> ${escapeHtml(q.fuente || "")} ${q.modelo ? `(Modelo ${escapeHtml(q.modelo)})` : ""} · <strong>Vistas:</strong> ${seen}</div>
-        <div style="margin-bottom:8px;">${escapeHtml(q.pregunta || "")}</div>
-        <div class="small">
-          <div>A) ${escapeHtml(q.opciones?.[0] ?? "")}</div>
-          <div>B) ${escapeHtml(q.opciones?.[1] ?? "")}</div>
-          <div>C) ${escapeHtml(q.opciones?.[2] ?? "")}</div>
-          <div>D) ${escapeHtml(q.opciones?.[3] ?? "")}</div>
-          <div style="margin-top:6px;"><strong>Correcta:</strong> ${["A","B","C","D"][q.respuesta_correcta] ?? "?"} · ${escapeHtml(q.opciones?.[q.respuesta_correcta] ?? "")}</div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
+          <div><strong>ID:</strong> ${escapeHtml(q.id || "")}</div>
+          <div class="small" style="text-align:right;"><strong>Fuente:</strong> ${escapeHtml(q.fuente || "")} ${q.modelo ? `(Modelo ${escapeHtml(q.modelo)})` : ""}</div>
+        </div>
+        <div style="margin-bottom:8px;"><strong>Bloque:</strong> ${escapeHtml(q.bloque || "")}</div>
+        <div style="margin-bottom:8px;"><strong>Tema:</strong> ${escapeHtml(q.tema || "")}</div>
+        <div style="margin-bottom:10px;"><strong>Pregunta:</strong> ${escapeHtml(q.pregunta || "")}</div>
+        <div>
+          <div><strong>Respuestas:</strong></div>
+          <div style="${q.respuesta_correcta === 0 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">A) ${escapeHtml(q.opciones?.[0] ?? "")}</div>
+          <div style="${q.respuesta_correcta === 1 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">B) ${escapeHtml(q.opciones?.[1] ?? "")}</div>
+          <div style="${q.respuesta_correcta === 2 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">C) ${escapeHtml(q.opciones?.[2] ?? "")}</div>
+          <div style="${q.respuesta_correcta === 3 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">D) ${escapeHtml(q.opciones?.[3] ?? "")}</div>
           <div style="margin-top:6px;"><strong>Explicación:</strong> ${escapeHtml(q.explicacion || "")}</div>
         </div>
         <div class="row" style="margin-top:10px;">
@@ -5094,9 +5702,6 @@ function openEditQuestionModal(id) {
     <label style="display:block;margin:8px 0;">Fuente:
       <input id="edit-fuente" style="width:100%;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.fuente || "")}">
     </label>
-    <label style="display:block;margin:8px 0;">Modelo (A/B o vacío):
-      <input id="edit-modelo" style="width:120px;padding:8px;border-radius:10px;border:1px solid var(--border);" value="${escapeHtmlAttr(q.modelo || "")}">
-    </label>
     <label style="display:block;margin:8px 0;">Pregunta:
       <textarea id="edit-pregunta" style="width:100%;padding:8px;min-height:70px;border-radius:10px;border:1px solid var(--border);"></textarea>
     </label>
@@ -5139,7 +5744,6 @@ function openEditQuestionModal(id) {
     const tema = card.querySelector("#edit-tema").value.trim();
     const bloque = card.querySelector("#edit-bloque").value.trim();
     const fuente = card.querySelector("#edit-fuente").value.trim();
-    const modelo = card.querySelector("#edit-modelo").value.trim();
     const pregunta = card.querySelector("#edit-pregunta").value.trim();
 
     const A = card.querySelector("#edit-a").value.trim();
@@ -5159,7 +5763,7 @@ function openEditQuestionModal(id) {
     const updated = {
       ...q,
       id: idStr, // 🔒 garantizamos string
-      tema, bloque, fuente, modelo,
+      tema, bloque, fuente,
       pregunta,
       opciones: [A, B, C, D],
       respuesta_correcta: idx,
@@ -5232,7 +5836,7 @@ function showTrashScreen() {
     <h2>Papelera de preguntas</h2>
 
     <div class="small" style="margin-bottom:10px;">
-      Preguntas eliminadas lógicamente. Puedes restaurarlas o borrarlas definitivamente.
+      Preguntas eliminadas. Puedes restaurarlas o borrarlas definitivamente.
     </div>
 
     <div class="row" style="margin-bottom:10px;">
@@ -5596,6 +6200,19 @@ function ensureDarkModeStyleTag() {
       color: var(--text) !important;
     }
 
+    /* Voz (home): mismo color para Mónica y Google español */
+    body.chatgpt-dark.is-home-screen .home-voice-choice,
+    body.chari-dark.is-home-screen .home-voice-choice,
+    body.chatgpt-dark.is-home-screen .home-voice-choice.secondary,
+    body.chari-dark.is-home-screen .home-voice-choice.secondary,
+    body.chatgpt-dark.is-home-screen .home-voice-choice.success,
+    body.chari-dark.is-home-screen .home-voice-choice.success {
+      background: var(--surface) !important;
+      border-color: color-mix(in srgb, var(--brand) 50%, var(--border)) !important;
+      box-shadow: none !important;
+      color: var(--text) !important;
+    }
+
     body.chatgpt-dark .answer-btn.is-correct {
       background: rgba(70, 160, 110, 0.28) !important;
     }
@@ -5816,7 +6433,7 @@ if (backConfigBtn) backConfigBtn.onclick = showMainMenu;
 openImportBtn.onclick = () => {
   // ✅ al entrar, vacío para pruebas (como pediste)
   clearImportTextarea();
-  showImportScreen();
+  showImportScreen("batch", showConfigScreen);
 };
 exportJsonBtn.onclick = () => exportQuestionsJSON();
 
@@ -5827,7 +6444,15 @@ noSeBtn.onclick = onNoSe;
 btnImportQuestions.onclick = importQuestionsFromTextarea;
 btnClearImport.onclick = clearImportTextarea;
 btnClearAdded.onclick = clearAddedQuestions;
-btnBackFromImport.onclick = showMainMenu;
+btnBackFromImport.onclick = backFromImportScreen;
+if (btnCopyImportTemplate) btnCopyImportTemplate.onclick = copyImportTemplateToClipboard;
+if (btnToggleImportTemplate) btnToggleImportTemplate.onclick = toggleImportTemplateExpanded;
+if (btnManualAddQuestion) btnManualAddQuestion.onclick = addManualQuestionToPool;
+if (manualBloqueInput) {
+  manualBloqueInput.onchange = () => {
+    refreshManualTemaOptionsForBloque(String(manualBloqueInput.value || ""));
+  };
+}
 if (voiceSettingsBackBtn) voiceSettingsBackBtn.onclick = showConfigScreen;
 if (motivationalPhraseEl) {
   motivationalPhraseEl.title = "Pulsa para cambiar la frase";
