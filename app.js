@@ -285,6 +285,10 @@ const timerDisplay = document.getElementById("timer");
 const modePill = document.getElementById("mode-pill");
 const motivationalPhraseEl = document.getElementById("motivational-phrase");
 const appVersionBadgeEl = document.getElementById("app-version-badge");
+const homeGlobalProgressEl = document.getElementById("home-global-progress");
+const homeGlobalProgressOkEl = document.getElementById("home-global-progress-ok");
+const homeGlobalProgressBadEl = document.getElementById("home-global-progress-bad");
+const homeGlobalProgressEmptyEl = document.getElementById("home-global-progress-empty");
 
 const ttsPanel = document.getElementById("tts-panel");
 const ttsVoiceList = document.getElementById("tts-voice-list");
@@ -3159,6 +3163,24 @@ function showMainMenu() {
     if (existing.has(s) && !done.has(s)) pendingCount++;
   }
 
+  // Barra global de progreso (home): verde = vistas no pendientes, rojo = pendientes, blanco = no vistas
+  if (homeGlobalProgressEl && homeGlobalProgressOkEl && homeGlobalProgressBadEl && homeGlobalProgressEmptyEl) {
+    const total = Math.max(0, questions.length);
+    let seen = 0;
+    const stats = getStats();
+    for (const q of questions) {
+      if ((stats[String(q.id)]?.seen || 0) > 0) seen += 1;
+    }
+    const bad = Math.min(total, pendingCount);
+    const ok = Math.max(0, Math.min(total, seen) - bad);
+    const empty = Math.max(0, total - Math.min(total, seen));
+
+    homeGlobalProgressOkEl.style.width = total > 0 ? `${(ok / total) * 100}%` : "0%";
+    homeGlobalProgressBadEl.style.width = total > 0 ? `${(bad / total) * 100}%` : "0%";
+    homeGlobalProgressEmptyEl.style.width = total > 0 ? `${(empty / total) * 100}%` : "100%";
+    homeGlobalProgressEl.title = `Aciertos: ${ok} · Fallos: ${bad} · No vistas: ${empty} · Total: ${total}`;
+  }
+
   const paused = lsGetJSON(LS_ACTIVE_PAUSED_TEST, null);
   const histRaw = lsGetJSON(LS_HISTORY, []);
   const hist = asArray(histRaw).filter(h => h && h.finished !== false);
@@ -4403,9 +4425,14 @@ function showTemaSelectionScreen() {
       line.style.cursor = "pointer";
       line.innerHTML = `
         <input type="checkbox" class="tema-checkbox" data-bloque="${escapeHtml(bloque)}" data-tema-key="${escapeHtml(temaKey)}" data-total="${counts.total}" value="${escapeHtml(t)}" style="display:none;">
-        <span class="small tema-count" style="color:var(--muted);text-align:right;line-height:1.2;">${counts.total}</span>
-        <span style="display:block;line-height:1.35;text-align:left;">${escapeHtml(temaNum)}</span>
-        <span style="display:block;line-height:1.35;text-align:justify;text-justify:inter-word;">${escapeHtml(temaText)}</span>
+        <span class="small tema-count" style="grid-column:1;grid-row:1;color:var(--muted);text-align:right;line-height:1.2;">${counts.total}</span>
+        <span style="grid-column:2;grid-row:1;display:block;line-height:1.35;text-align:left;">${escapeHtml(temaNum)}</span>
+        <span style="grid-column:3;grid-row:1;display:block;line-height:1.35;text-align:justify;text-justify:inter-word;align-self:start;">${escapeHtml(temaText)}</span>
+        <div class="tema-progress" data-tema-key="${escapeHtml(temaKey)}" style="grid-column:1 / 3;grid-row:1;margin-top:28px;" aria-hidden="true">
+          <span class="tema-progress-ok" style="width:0%;"></span>
+          <span class="tema-progress-bad" style="width:0%;"></span>
+          <span class="tema-progress-empty" style="width:100%;"></span>
+        </div>
       `;
       temasList.appendChild(line);
     });
@@ -4750,20 +4777,38 @@ function showTemaSelectionScreen() {
   }
 
   function updateTemaCountsForFuentes() {
+    const pendingSet = getPendingReviewSet();
     const fuenteSet = getActiveFuenteSet();
     wrap.querySelectorAll(".tema-checkbox").forEach(cb => {
       const temaKey = cb.getAttribute("data-tema-key");
       const label = cb.closest(".tema-line");
       const countEl = label ? label.querySelector(".tema-count") : null;
+      const progressEl = label ? label.querySelector(".tema-progress") : null;
       const list = temaToQuestions.get(temaKey) || [];
       let total = 0;
+      let seen = 0;
+      let pending = 0;
       for (const q of list) {
         const f = q.fuente || "Sin fuente";
         if (!fuenteSet.has(f)) continue;
         total += 1;
+        if ((stats[String(q.id)]?.seen || 0) > 0) seen += 1;
+        if (pendingSet.has(String(q.id))) pending += 1;
       }
+      const bad = Math.min(total, pending);
+      const ok = Math.max(0, Math.min(total, seen) - bad);
+      const empty = Math.max(0, total - Math.min(total, seen));
       cb.setAttribute("data-total", String(total));
       if (countEl) countEl.textContent = `${total}`;
+      if (progressEl) {
+        const okEl = progressEl.querySelector(".tema-progress-ok");
+        const badEl = progressEl.querySelector(".tema-progress-bad");
+        const emptyEl = progressEl.querySelector(".tema-progress-empty");
+        if (okEl) okEl.style.width = total > 0 ? `${(ok / total) * 100}%` : "0%";
+        if (badEl) badEl.style.width = total > 0 ? `${(bad / total) * 100}%` : "0%";
+        if (emptyEl) emptyEl.style.width = total > 0 ? `${(empty / total) * 100}%` : "100%";
+        progressEl.title = `Aciertos: ${ok} · Fallos: ${bad} · No vistas: ${empty}`;
+      }
     });
   }
 

@@ -703,6 +703,39 @@ body.is-home-screen #main-top {
   padding-top: clamp(22px, 4vh, 40px);
 }
 
+body.is-home-screen #home-global-progress-wrap {
+  width: min(84vw, 340px);
+  margin: 0 auto 10px;
+}
+
+body.is-home-screen #home-global-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  border: 1px solid color-mix(in srgb, var(--brand) 24%, var(--border));
+  background: color-mix(in srgb, var(--surface) 90%, #eef4ff);
+}
+
+body.is-home-screen #home-global-progress > span {
+  height: 100%;
+  display: block;
+  transition: width var(--anim-fast) ease;
+}
+
+body.is-home-screen #home-global-progress-ok {
+  background: color-mix(in srgb, #3ea66a 75%, var(--surface));
+}
+
+body.is-home-screen #home-global-progress-bad {
+  background: color-mix(in srgb, #d95b63 78%, var(--surface));
+}
+
+body.is-home-screen #home-global-progress-empty {
+  background: color-mix(in srgb, var(--surface) 92%, #eef4ff);
+}
+
 body.is-home-screen #motivational-phrase {
   margin-bottom: 12px !important;
   margin-left: auto !important;
@@ -3401,6 +3434,8 @@ body.is-pause-modal-open #app-modal-overlay .modal {
   -webkit-touch-callout: none;
   touch-action: manipulation;
   user-select: none;
+  align-items: start !important;
+  align-content: start;
 }
 
 #test-menu.customize-test-theme .tema-line:hover {
@@ -3425,6 +3460,38 @@ body.is-pause-modal-open #app-modal-overlay .modal {
 
 #test-menu.customize-test-theme .tema-line.tema-press-flash {
   background: var(--press-flash-bg) !important;
+}
+
+#test-menu.customize-test-theme .tema-progress {
+  width: calc(100% - 12px);
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  border: 1px solid color-mix(in srgb, var(--brand) 24%, var(--border));
+  background: color-mix(in srgb, var(--surface) 88%, #eef4ff);
+  margin-left: 0;
+  margin-right: 0;
+  justify-self: center;
+  align-self: start;
+}
+
+#test-menu.customize-test-theme .tema-progress > span {
+  height: 100%;
+  display: block;
+  transition: width var(--anim-fast) ease;
+}
+
+#test-menu.customize-test-theme .tema-progress-ok {
+  background: color-mix(in srgb, #3ea66a 75%, var(--surface));
+}
+
+#test-menu.customize-test-theme .tema-progress-bad {
+  background: color-mix(in srgb, #d95b63 78%, var(--surface));
+}
+
+#test-menu.customize-test-theme .tema-progress-empty {
+  background: color-mix(in srgb, var(--surface) 92%, #eef4ff);
 }
 
 #test-menu.customize-test-theme #btn-start-practice {
