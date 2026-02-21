@@ -1648,20 +1648,5 @@
     ],
     "respuesta_correcta": 1,
     "explicacion": "La supresión del Instituto Nacional del Libro Español se produjo en el contexto de reorganizaciones administrativas de los años ochenta, vinculadas a cambios en las políticas culturales y editoriales del Estado."
-  },
-  {
-    "id": "A1.2024.999",
-    "tema": "99. Pregunta de prueba temporal.",
-    "bloque": "Bloque 1. Legislación",
-    "fuente": "A1 2024",
-    "pregunta": "Esto es un test de prueba:",
-    "opciones": [
-      "Casa.",
-      "Cerezo.",
-      "Perro.",
-      "Aguacate."
-    ],
-    "respuesta_correcta": 0,
-    "explicacion": "Pregunta de prueba temporal para validaciones de la app."
   }
 ]

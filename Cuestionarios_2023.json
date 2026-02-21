@@ -71,7 +71,7 @@
       "Se recogen en el Capítulo Tercero del Título V.",
       "Se recogen en el Capítulo Quinto del Título I."
     ],
-    "respuesta_correcta": 1,
+    "respuesta_correcta": 0,
     "explicacion": "El Capítulo Tercero del Título I (artículos 39 a 52) recoge los principios rectores de la política social y económica, que orientan la actuación de los poderes públicos."
   },
   {
@@ -259,7 +259,7 @@
     "tema": "4. El Poder Judicial. La justicia en la Constitución. El Consejo General del Poder Judicial. La Administración de Justicia. El Ministerio Fiscal.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "La Justicia:",
+    "pregunta": "Según el artículo 117.1 de la Constitución, la Justicia:",
     "opciones": [
       "Emana del Rey y es administrada por Jueces y Magistrados en su nombre.",
       "Emana del pueblo y es administrada por Jueces y Magistrados en nombre del Rey.",
@@ -1009,7 +1009,7 @@
     "tema": "12. La Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas. El procedimiento administrativo común: Concepto, naturaleza, fases y características. Términos y plazos. Recursos administrativos.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "En la audiencia:",
+    "pregunta": "En el trámite de audiencia del procedimiento administrativo:",
     "opciones": [
       "Se abre el expediente a público conocimiento para que presenten alegaciones.",
       "La Administración pide informes a otras Administraciones.",
@@ -1039,7 +1039,7 @@
     "tema": "12. La Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas. El procedimiento administrativo común: Concepto, naturaleza, fases y características. Términos y plazos. Recursos administrativos.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "La resolución:",
+    "pregunta": "La resolución administrativa, con carácter general:",
     "opciones": [
       "Siempre debe ser notificada.",
       "La notificación se sustituye en algunos procedimientos por la publicación.",
@@ -1099,7 +1099,7 @@
     "tema": "12. La Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas. El procedimiento administrativo común: Concepto, naturaleza, fases y características. Términos y plazos. Recursos administrativos.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "A su vez, los recursos administrativos pueden ser:",
+    "pregunta": "En la Ley 39/2015, los recursos administrativos pueden ser:",
     "opciones": [
       "Alzada, reposición, contencioso, revisión.",
       "Alzada, reposición, revisión.",
@@ -1474,7 +1474,7 @@
     "tema": "22. Las políticas de igualdad y no discriminación: normativa vigente. Los derechos de las personas con discapacidad; protección a los colectivos más desfavorecidos; la dependencia. Políticas de igualdad de género. La lucha contra la violencia de género. Derechos de las personas LGTBI e igualdad de las personas trans.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "En el preámbulo de la ley se explica la creación de un órgano judicial para la tutela judicial:",
+    "pregunta": "En el preámbulo de la Ley Orgánica 1/2004 se explica la creación de un órgano judicial para la tutela judicial:",
     "opciones": [
       "Juzgados de Violencia sobre la Mujer.",
       "Audiencia Nacional.",
@@ -1849,7 +1849,7 @@
     "tema": "26. El Ministerio de Cultura. Organización, competencias, organismos y políticas públicas en materia de cultura, lectura, libro y bibliotecas.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "La Biblioteca Nacional de España:",
+    "pregunta": "Según la Ley 1/2015, la Biblioteca Nacional de España:",
     "opciones": [
       "Depende del Ministerio a que no tiene personalidad jurídica pública diferenciada, patrimonio y tesorería propios.",
       "Se rige por su legislación propia.",
@@ -1924,7 +1924,7 @@
     "tema": "26. El Ministerio de Cultura. Organización, competencias, organismos y políticas públicas en materia de cultura, lectura, libro y bibliotecas.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "Museo Nacional del Prado es:",
+    "pregunta": "El Museo Nacional del Prado es:",
     "opciones": [
       "Es un organismo público con personalidad jurídica propia y plena capacidad de obrar.",
       "Es un organismo privado con personalidad jurídica propia y plena capacidad de obrar, pública y privada, para el cumplimiento de sus fines.",
@@ -2149,7 +2149,7 @@
     "tema": "17. La Ley 16/1985, de 25 de junio, del Patrimonio Histórico Español. El Patrimonio Documental y Bibliográfico. Los Archivos, Bibliotecas y Museos. La declaración de Bienes de Interés Cultural. La protección de los bienes muebles e inmuebles. Las medidas de fomento.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "Son BIC:",
+    "pregunta": "Según la Ley 16/1985, son Bienes de Interés Cultural (BIC):",
     "opciones": [
       "Aquellos bienes que con anterioridad hayan sido declarados histórico-artísticos o incluidos en el Inventario del Patrimonio Artístico y Arqueológico.",
       "Además, todos \"los castillos de España cualquiera que sea su estado de ruina\"; los escudos, emblemas, piedras heráldicas, rollos de justicia, cruces de término y piezas similares de interés artístico; los \"hórreos o cabazos\" antiguos existentes en Asturias y Galicia (protegidos también por una norma de la Comunidad Gallega); las cuevas, abrigos y lugares que contengan manifestaciones de arte rupestre.",
@@ -2194,7 +2194,7 @@
     "tema": "17. La Ley 16/1985, de 25 de junio, del Patrimonio Histórico Español. El Patrimonio Documental y Bibliográfico. Los Archivos, Bibliotecas y Museos. La declaración de Bienes de Interés Cultural. La protección de los bienes muebles e inmuebles. Las medidas de fomento.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "Los Ayuntamientos:",
+    "pregunta": "Según la Ley 16/1985, los Ayuntamientos:",
     "opciones": [
       "Cooperarán con los organismos competentes para la conservación y custodia del Patrimonio Histórico Español comprendido en su término municipal, adoptando las medidas oportunas para evitar su deterioro, pérdida o destrucción.",
       "Cooperarán con los organismos internacionales para poder custodiar lo bienes artísticos comprendidos en su término municipal, adoptando las medidas oportunas para evitar su deterioro, pérdida o destrucción.",
@@ -2224,7 +2224,7 @@
     "tema": "19. Legislación Bibliotecaria Española. Ley 10/2007, de la lectura, del libro y las bibliotecas. Ley 1/2015 reguladora de la Biblioteca Nacional de España.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "Según la Ley 10/2007, de 22 de junio:",
+    "pregunta": "Según la Ley 10/2007, de 22 de junio, en relación con el precio fijo del libro:",
     "opciones": [
       "No reconoce la existencia del libro electrónico.",
       "No incluye el libro electrónico en la definición de libro.",
@@ -2329,7 +2329,7 @@
     "tema": "19. Legislación Bibliotecaria Española. Ley 10/2007, de la lectura, del libro y las bibliotecas. Ley 1/2015 reguladora de la Biblioteca Nacional de España.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "La mencionada Ley dedica a la promoción de los autores y la industria del libro:",
+    "pregunta": "La Ley 10/2007, de 22 de junio, dedica a la promoción de los autores y la industria del libro:",
     "opciones": [
       "El Capítulo III.",
       "El Capítulo II.",
@@ -2404,7 +2404,7 @@
     "tema": "19. Legislación Bibliotecaria Española. Ley 10/2007, de la lectura, del libro y las bibliotecas. Ley 1/2015 reguladora de la Biblioteca Nacional de España.",
     "bloque": "Bloque 1. Legislación",
     "fuente": "Cuestionarios 2023",
-    "pregunta": "La Ley 10/2007, de 22 de junio:",
+    "pregunta": "La Ley 10/2007, de 22 de junio, en relación con la evaluación de la lectura y las bibliotecas:",
     "opciones": [
       "No recoge el análisis de la situación de la lectura y las bibliotecas.",
       "No menciona la necesidad de evaluar la situación de la lectura y las bibliotecas.",

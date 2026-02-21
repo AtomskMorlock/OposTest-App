@@ -1,3 +1,4 @@
+0.6.3 - Ajustes de interfaz y correcciones de interacción: flechas en Personalizado, mejoras de marcado por deslizamiento en respuestas y limpieza de contenido de prueba.
 0.6.2 - Fix de layout móvil en test (bloques largos y anclaje de controles), correcciones de splash/orientación al recargar y limpieza de enunciados ambiguos en cuestionarios.
 0.6.1 - Fix de transición del logo al terminar la animación en móvil (elimina salto lateral en el handoff a Home).
 0.6.0 - Ajustes de recarga (sin splash tras refresh), corrección de restauración de pantallas al recargar y mejoras en filtros de "Personalizar test" (incluye "Solo preguntas ya vistas" y exclusión mutua de filtros).

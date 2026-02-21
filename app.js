@@ -308,6 +308,8 @@ let homeActionTimer = null;
 let testBottomResizeObserver = null;
 let testBottomResizeRaf = null;
 let testAnswerDockRaf = null;
+let pendingFinishReason = null;
+let customJumpTopScrollHandler = null;
 const voiceSettingsBtn = document.getElementById("btn-voice-settings");
 const voiceSettingsBackBtn = document.getElementById("btn-voice-back");
 const openImportBtn = document.getElementById("btn-open-import");
@@ -3605,6 +3607,10 @@ function closeTestStartModal() {
 // NAVEGACIÓN UI
 // =======================
 function showTestMenuScreen() {
+  if (customJumpTopScrollHandler && testMenu) {
+    testMenu.removeEventListener("scroll", customJumpTopScrollHandler);
+    customJumpTopScrollHandler = null;
+  }
   hideAll();
   setUiScreenState("test-menu");
   testMenu.classList.remove("customize-test-theme");
@@ -3813,11 +3819,11 @@ function showStatsScreen() {
   const dayRows = Array.from(byDay.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([day, v]) => {
-      const answered = v.correct + v.wrong;
+      const answered = v.correct + v.wrong + v.noSe;
       const dateLabel = new Date(`${day}T00:00:00`).toLocaleDateString("es-ES");
       return `
         <div class="small" style="margin:6px 0;">
-          <strong>${dateLabel}:</strong> ${answered} respondidas · ${v.correct} aciertos · ${v.wrong} fallos
+          <strong>${dateLabel}:</strong> ${answered} respondidas · ${v.correct} aciertos · ${v.wrong} fallos · ${v.noSe} no lo sé
         </div>
       `;
     })
@@ -4235,6 +4241,16 @@ function groupTemasByBloque() {
 
 function showTemaSelectionScreen() {
   mode = "practice";
+  const customScrollContainer = testMenu;
+  const scrollCustomTo = (target = "top", behavior = "smooth") => {
+    if (!customScrollContainer) return;
+    const top = target === "bottom" ? customScrollContainer.scrollHeight : 0;
+    try {
+      customScrollContainer.scrollTo({ top, behavior });
+    } catch (_) {
+      customScrollContainer.scrollTop = top;
+    }
+  };
 
   showTestMenuScreen();
   setUiScreenState("tema-selection");
@@ -4257,6 +4273,10 @@ function showTemaSelectionScreen() {
   const totalQuestions = questions.length;
 
   testMenu.innerHTML = `
+    <div class="row custom-top-head">
+      <button id="custom-jump-top" class="secondary" aria-label="Subir al inicio" title="Subir">↑</button>
+    </div>
+
     <div id="custom-time-card" class="card" style="margin:12px 0;text-align:center;padding:10px;">
       <div style="font-weight:700;margin:8px 0 6px 0;">Nº de preguntas</div>
       <div class="row" id="num-questions-buttons" style="justify-content:center;margin-bottom:6px;">
@@ -4302,14 +4322,30 @@ function showTemaSelectionScreen() {
 
     <div id="tema-select-wrap"></div>
 
-    <div id="tema-bottom-actions" style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
+    <div id="tema-start-sticky" style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
       <button id="btn-back-main" class="secondary">Volver</button>
-    </div>
-
-    <div id="tema-start-sticky" style="display:flex;justify-content:center;margin-top:12px;">
       <button id="btn-start-practice" class="success">Iniciar test</button>
+      <button id="custom-jump-bottom" class="secondary" aria-label="Bajar al final" title="Bajar">↓</button>
     </div>
   `;
+
+  const customJumpTopBtn = document.getElementById("custom-jump-top");
+  if (customJumpTopBtn) customJumpTopBtn.onclick = () => scrollCustomTo("top");
+  const customJumpBottomBtn = document.getElementById("custom-jump-bottom");
+  if (customJumpBottomBtn) customJumpBottomBtn.onclick = () => scrollCustomTo("bottom");
+  if (customScrollContainer) {
+    if (customJumpTopScrollHandler) {
+      customScrollContainer.removeEventListener("scroll", customJumpTopScrollHandler);
+      customJumpTopScrollHandler = null;
+    }
+    customJumpTopScrollHandler = () => {
+      if (!customJumpTopBtn) return;
+      const show = (customScrollContainer.scrollTop || 0) > 12;
+      customJumpTopBtn.classList.toggle("is-hidden", !show);
+    };
+    customScrollContainer.addEventListener("scroll", customJumpTopScrollHandler, { passive: true });
+    customJumpTopScrollHandler();
+  }
 
   const wrap = document.getElementById("tema-select-wrap");
   const fuenteWrap = document.getElementById("fuente-select-wrap");
@@ -5306,6 +5342,7 @@ function startSession(pool, opts) {
   currentShuffledOptions = [];
   lastSelectedText = null;
   lastCorrectText = null;
+  pendingFinishReason = null;
   ttsLastQuestionId = null;
 
   showTestScreen();
@@ -5323,6 +5360,134 @@ function startSession(pool, opts) {
 // =======================
 // TEST RENDER + LÓGICA
 // =======================
+function wireAnswerEliminateGesture(btn) {
+  if (!(btn instanceof HTMLElement)) return;
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+  let toggledInThisGesture = false;
+  const SWIPE_X = 30;
+  const SWIPE_Y_MAX = 44;
+  const MAX_DRAG = 72;
+
+  const resetDragVisual = () => {
+    btn.classList.remove("is-swipe-drag");
+    btn.style.removeProperty("--swipe-dx");
+    btn.style.removeProperty("--swipe-progress");
+  };
+
+  const updateDragVisual = (dx) => {
+    if (!tracking || toggledInThisGesture) return;
+    if (dx >= 0) {
+      resetDragVisual();
+      return;
+    }
+    const clamped = Math.max(-MAX_DRAG, dx);
+    const progress = Math.min(1, Math.abs(clamped) / MAX_DRAG);
+    btn.classList.add("is-swipe-drag");
+    btn.style.setProperty("--swipe-dx", `${clamped}px`);
+    btn.style.setProperty("--swipe-progress", String(progress));
+  };
+
+  const markConsumed = () => {
+    btn.dataset.swipeConsumedUntil = String(Date.now() + 700);
+  };
+
+  const tryToggle = (x, y) => {
+    if (!tracking || toggledInThisGesture) return false;
+    const dx = x - startX;
+    const dy = y - startY;
+    updateDragVisual(dx);
+    if (dx <= -SWIPE_X && Math.abs(dy) <= SWIPE_Y_MAX) {
+      btn.classList.toggle("is-eliminated");
+      toggledInThisGesture = true;
+      markConsumed();
+      resetDragVisual();
+      return true;
+    }
+    return false;
+  };
+
+  const begin = (x, y) => {
+    tracking = true;
+    toggledInThisGesture = false;
+    startX = x;
+    startY = y;
+    resetDragVisual();
+  };
+
+  const end = (x, y) => {
+    if (!tracking) return;
+    tryToggle(x, y);
+    tracking = false;
+    resetDragVisual();
+  };
+
+  const isTouchDevice = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+
+  if (isTouchDevice) {
+    // Touch-only path to avoid duplicate toggles on browsers that emit both pointer and touch.
+    btn.addEventListener("touchstart", (e) => {
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      begin(t.clientX, t.clientY);
+    }, { passive: true });
+
+    btn.addEventListener("touchmove", (e) => {
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      tryToggle(t.clientX, t.clientY);
+    }, { passive: true });
+
+    btn.addEventListener("touchend", (e) => {
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      end(t.clientX, t.clientY);
+    }, { passive: true });
+
+    btn.addEventListener("touchcancel", () => {
+      tracking = false;
+      toggledInThisGesture = false;
+      resetDragVisual();
+    }, { passive: true });
+    return;
+  }
+
+  if (window.PointerEvent) {
+    btn.addEventListener("pointerdown", (e) => {
+      if (!e.isPrimary) return;
+      begin(e.clientX, e.clientY);
+    }, { passive: true });
+
+    btn.addEventListener("pointermove", (e) => {
+      if (!e.isPrimary) return;
+      tryToggle(e.clientX, e.clientY);
+    }, { passive: true });
+
+    btn.addEventListener("pointerup", (e) => {
+      if (!e.isPrimary) return;
+      end(e.clientX, e.clientY);
+    }, { passive: true });
+
+    btn.addEventListener("pointercancel", () => {
+      tracking = false;
+      toggledInThisGesture = false;
+      resetDragVisual();
+    }, { passive: true });
+    return;
+  }
+
+  // Mouse fallback
+  btn.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY));
+  btn.addEventListener("mousemove", (e) => tryToggle(e.clientX, e.clientY));
+  btn.addEventListener("mouseup", (e) => end(e.clientX, e.clientY));
+  btn.addEventListener("mouseleave", () => {
+    tracking = false;
+    toggledInThisGesture = false;
+    resetDragVisual();
+  });
+}
+
 function renderQuestionWithOptions(q, opcionesOrdenadas) {
   questionText.textContent = `${currentIndex + 1}. ${q.pregunta}`;
   answersContainer.innerHTML = "";
@@ -5335,6 +5500,7 @@ function renderQuestionWithOptions(q, opcionesOrdenadas) {
   noSeBtn.style.display = "inline-block";
   noSeBtn.textContent = "No lo sé";
   noSeBtn.classList.toggle("is-mode-disabled", isSurvivalMode);
+  noSeBtn.classList.toggle("is-survival-disabled", isSurvivalMode);
   if (isSurvivalMode) {
     noSeBtn.disabled = true;
     noSeBtn.onclick = null;
@@ -5356,13 +5522,18 @@ function renderQuestionWithOptions(q, opcionesOrdenadas) {
     const letter = letters[idx] || String(idx + 1);
     btn.innerHTML = `
       <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:6px;margin-right:8px;font-weight:700;">${letter}</span>
-      <span style="text-align:left;flex:1;">${escapeHtml(opt)}</span>
+      <span class="answer-text" style="text-align:left;flex:1;">${escapeHtml(opt)}</span>
     `;
     btn.className = "answer-btn";
     btn.dataset.optionText = opt;
     btn.style.display = "flex";
     btn.style.alignItems = "center";
-    btn.onclick = () => checkAnswer(opt, q);
+    btn.onclick = () => {
+      const consumedUntil = Number(btn.dataset.swipeConsumedUntil || "0");
+      if (consumedUntil > Date.now()) return;
+      checkAnswer(opt, q);
+    };
+    wireAnswerEliminateGesture(btn);
     answersContainer.appendChild(btn);
   });
 
@@ -5456,7 +5627,8 @@ function checkAnswer(selectedText, q) {
   );
   updateTestTopUiForMode();
   if (isSurvivalModeValue() && !isCorrect) {
-    finishTest("survival-fail");
+    pendingFinishReason = "survival-fail";
+    showAnswer(q, selectedText);
     return;
   }
   showAnswer(q, selectedText);
@@ -5507,22 +5679,18 @@ function showAnswer(q, selectedTextOrNull) {
 
   const isSurvivalMode = isSurvivalModeValue();
   noSeBtn.style.display = "inline-block";
-  noSeBtn.classList.toggle("is-mode-disabled", isSurvivalMode);
-  if (isSurvivalMode) {
-    noSeBtn.disabled = true;
-    noSeBtn.textContent = "No lo sé";
-    noSeBtn.onclick = null;
-  } else {
-    noSeBtn.disabled = false;
-    noSeBtn.textContent = "Continuar";
-  }
+  noSeBtn.classList.remove("is-mode-disabled", "is-survival-disabled");
+  noSeBtn.disabled = false;
+  noSeBtn.textContent = "Continuar";
 
   const correctText = q.opciones[q.respuesta_correcta];
   const buttons = answersContainer.querySelectorAll(".answer-btn");
 
   buttons.forEach(btn => {
     const t = (btn.dataset.optionText || "").toString();
-    btn.classList.remove("is-correct", "is-wrong");
+    btn.classList.remove("is-correct", "is-wrong", "is-swipe-drag");
+    btn.style.removeProperty("--swipe-dx");
+    btn.style.removeProperty("--swipe-progress");
     if (t === correctText) btn.classList.add("is-correct");
     else if (selectedTextOrNull !== null && t === selectedTextOrNull) btn.classList.add("is-wrong");
     btn.disabled = false;
@@ -5550,6 +5718,13 @@ function showAnswer(q, selectedTextOrNull) {
       btn.style.cursor = "";
     });
 
+    if (pendingFinishReason) {
+      const reason = pendingFinishReason;
+      pendingFinishReason = null;
+      finishTest(reason);
+      return;
+    }
+
     currentIndex++;
     viewState = "question";
     showQuestion();
@@ -5558,7 +5733,7 @@ function showAnswer(q, selectedTextOrNull) {
     continueBtn.style.display = "none";
     continueBtn.onclick = continueFromFeedback;
   }
-  if (!isSurvivalMode) noSeBtn.onclick = continueFromFeedback;
+  noSeBtn.onclick = continueFromFeedback;
 
   buttons.forEach(btn => {
     btn.onclick = continueFromFeedback;
@@ -5780,12 +5955,15 @@ function finishTest(reason = "manual") {
   const resultsActionsBottom = document.getElementById("results-actions-bottom");
   if (resultsActionsBottom) {
     resultsActionsBottom.innerHTML = `
+      <button id="btn-new-test" class="secondary">Nuevo test</button>
       ${isArcadeMode ? "" : `<button id="btn-repeat-test">Repetir test</button>`}
       <button id="btn-review-test">Repasar test</button>
     `;
     resultsActionsBottom.appendChild(backToMenuBtnResults);
   }
 
+  const newTestBtn = document.getElementById("btn-new-test");
+  if (newTestBtn) newTestBtn.onclick = () => startNewTestFromResults();
   const repeatBtn = document.getElementById("btn-repeat-test");
   if (repeatBtn) repeatBtn.onclick = () => repeatLastTest();
   document.getElementById("btn-review-test").onclick = () => showReviewScreen();
@@ -5799,6 +5977,123 @@ function buildPoolFromIds(ids) {
   return asArray(ids)
     .map(id => idToQ.get(String(id)))
     .filter(Boolean);
+}
+
+function buildPoolPreferUnseen(candidates, opts = {}) {
+  const list = Array.isArray(candidates) ? candidates.slice() : [];
+  const count = Math.max(0, Number(opts.count) || list.length);
+  const excludeIds = new Set(asArray(opts.excludeIds).map(String));
+  const preferredFallbackIds = new Set(asArray(opts.preferredFallbackIds).map(String));
+
+  const fresh = list.filter(q => !excludeIds.has(String(q.id)));
+  const preferredFallback = list.filter(q => excludeIds.has(String(q.id)) && preferredFallbackIds.has(String(q.id)));
+  const rest = list.filter(q => excludeIds.has(String(q.id)) && !preferredFallbackIds.has(String(q.id)));
+
+  shuffleArray(fresh);
+  shuffleArray(preferredFallback);
+  shuffleArray(rest);
+
+  const out = [];
+  const seen = new Set();
+  const pushUnique = (q) => {
+    const id = String(q?.id ?? "");
+    if (!id || seen.has(id)) return false;
+    out.push(q);
+    seen.add(id);
+    return true;
+  };
+
+  for (const q of fresh) {
+    if (out.length >= count) break;
+    pushUnique(q);
+  }
+  for (const q of preferredFallback) {
+    if (out.length >= count) break;
+    pushUnique(q);
+  }
+  for (const q of rest) {
+    if (out.length >= count) break;
+    pushUnique(q);
+  }
+
+  return out;
+}
+
+function startNewTestFromResults() {
+  const modeKey = sessionOpts?.mode || mode || "practice";
+  const baseIds = asArray(sessionOpts?.meta?.baseTestIds).map(String);
+  const answeredIds = new Set(asArray(lastSessionAnswers).map(a => String(a?.id || "")).filter(Boolean));
+  const failedIds = new Set(
+    asArray(lastSessionAnswers)
+      .filter(a => String(a?.resultado || "").toUpperCase() !== "ACIERTO")
+      .map(a => String(a?.id || ""))
+      .filter(Boolean)
+  );
+
+  const desiredCount = (() => {
+    if (sessionOpts?.meta?.quick && Number(sessionOpts?.meta?.count) > 0) return Number(sessionOpts.meta.count);
+    if (modeKey === "exam") return 100;
+    if (modeKey === "exam-block") return 20;
+    if (modeKey === "review") return baseIds.length || currentTest.length;
+    return baseIds.length || currentTest.length || 10;
+  })();
+
+  let pool = [];
+
+  if (modeKey === "review") {
+    prunePendingGhostIds();
+    const existing = getExistingIdSet();
+    const pending = getPendingReviewSet();
+    const done = getPendingDoneSet();
+    const ids = Array.from(pending).filter(id => existing.has(String(id)) && !done.has(String(id)));
+    const candidates = buildPoolFromIds(ids);
+    pool = buildPoolPreferUnseen(candidates, {
+      count: desiredCount,
+      excludeIds: Array.from(answeredIds),
+      preferredFallbackIds: Array.from(failedIds)
+    });
+    if (!pool.length) {
+      showAlert("No hay preguntas disponibles para iniciar un nuevo repaso.");
+      return;
+    }
+  } else if (modeKey === "exam-block") {
+    const targetBlock = String(sessionOpts?.meta?.bloque || "").trim();
+    const candidates = (questions || []).filter(q => (q.bloque || "Sin bloque") === targetBlock);
+    pool = buildPoolPreferUnseen(candidates, { count: desiredCount, excludeIds: Array.from(answeredIds) });
+  } else if (modeKey === "exam") {
+    pool = buildPoolPreferUnseen(questions || [], { count: desiredCount, excludeIds: Array.from(answeredIds) });
+  } else if (modeKey === "practice" && sessionOpts?.meta?.quick) {
+    pool = buildPoolPreferUnseen(questions || [], { count: desiredCount, excludeIds: Array.from(answeredIds) });
+  } else if (isClockModeValue(modeKey) || isSurvivalModeValue(modeKey)) {
+    const ordered = buildPoolPreferUnseen(questions || [], {
+      count: (questions || []).length,
+      excludeIds: Array.from(answeredIds)
+    });
+    pool = ordered;
+  } else {
+    const basePool = buildPoolFromIds(baseIds);
+    const candidates = basePool.length ? basePool : (questions || []);
+    pool = buildPoolPreferUnseen(candidates, { count: desiredCount, excludeIds: Array.from(answeredIds) });
+  }
+
+  if (!pool.length) {
+    showAlert("No se pudo iniciar un nuevo test con los parámetros de la última sesión.");
+    return;
+  }
+
+  mode = modeKey;
+  if (modeKey === "perfection") {
+    perfectionQueue = [];
+    perfectionSet = new Set();
+  }
+
+  startSession(pool, {
+    mode: modeKey,
+    timeSeconds: modeKey === "review" ? (pool.length * 60) : (sessionOpts?.timeSeconds || (pool.length * 60)),
+    countNonAnsweredAsWrongOnFinish: !!sessionOpts?.countNonAnsweredAsWrongOnFinish,
+    allowContinueOnTimeUp: sessionOpts?.allowContinueOnTimeUp !== false,
+    meta: { ...(sessionOpts?.meta || {}), isRepeatSession: true }
+  });
 }
 
 function repeatLastTest() {
@@ -6572,18 +6867,19 @@ function showQuestionBank() {
   const BANK_PAGE_SIZE = 50;
   let bankFilteredResults = [];
   let bankPageIndex = 0;
+  let bankSearchTerm = "";
 
   const renderCurrentBankPage = () => {
     const total = bankFilteredResults.length;
     if (total === 0) {
-      renderBankResults([], { total: 0, start: 0, pageSize: BANK_PAGE_SIZE });
+      renderBankResults([], { total: 0, start: 0, pageSize: BANK_PAGE_SIZE, term: bankSearchTerm });
       return;
     }
     const maxPage = Math.max(0, Math.ceil(total / BANK_PAGE_SIZE) - 1);
     bankPageIndex = Math.min(Math.max(bankPageIndex, 0), maxPage);
     const start = bankPageIndex * BANK_PAGE_SIZE;
     const pageItems = bankFilteredResults.slice(start, start + BANK_PAGE_SIZE);
-    renderBankResults(pageItems, { total, start, pageSize: BANK_PAGE_SIZE });
+    renderBankResults(pageItems, { total, start, pageSize: BANK_PAGE_SIZE, term: bankSearchTerm });
 
     const prevBtn = document.getElementById("bank-page-prev");
     const nextBtn = document.getElementById("bank-page-next");
@@ -6607,6 +6903,7 @@ function showQuestionBank() {
 
   const runSearch = () => {
     const term = (document.getElementById("bank-search").value || "").trim().toLowerCase();
+    bankSearchTerm = term;
     const searchTemaOn = document.getElementById("bank-scope-tema")?.classList.contains("success");
     const searchQaOn = document.getElementById("bank-scope-qa")?.classList.contains("success");
     const fb = Array.from(document.querySelectorAll('#bank-filter-bloque-wrap .fuente-btn.success'))
@@ -6732,6 +7029,7 @@ function renderBankResults(list, meta = {}) {
   if (!box) return;
   const totalCount = Number(meta.total ?? list.length) || 0;
   const start = Number(meta.start ?? 0) || 0;
+  const term = String(meta.term || "").trim();
 
   if (!list.length && totalCount === 0) {
     box.innerHTML = "<p>No hay resultados.</p>";
@@ -6762,19 +7060,19 @@ function renderBankResults(list, meta = {}) {
     return `
       <div class="card" style="padding:12px;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
-          <div><strong>ID:</strong> ${escapeHtml(q.id || "")}</div>
-          <div class="small" style="text-align:right;"><strong>Fuente:</strong> ${escapeHtml(q.fuente || "")} ${q.modelo ? `(Modelo ${escapeHtml(q.modelo)})` : ""}</div>
+          <div><strong>ID:</strong> ${highlightBankSearchText(q.id || "", term)}</div>
+          <div class="small" style="text-align:right;"><strong>Fuente:</strong> ${highlightBankSearchText(q.fuente || "", term)} ${q.modelo ? `(Modelo ${escapeHtml(q.modelo)})` : ""}</div>
         </div>
-        <div style="margin-bottom:8px;"><strong>Bloque:</strong> ${escapeHtml(q.bloque || "")}</div>
-        <div style="margin-bottom:8px;"><strong>Tema:</strong> ${escapeHtml(q.tema || "")}</div>
-        <div style="margin-bottom:10px;"><strong>Pregunta:</strong> ${escapeHtml(q.pregunta || "")}</div>
+        <div style="margin-bottom:8px;"><strong>Bloque:</strong> ${highlightBankSearchText(q.bloque || "", term)}</div>
+        <div style="margin-bottom:8px;"><strong>Tema:</strong> ${highlightBankSearchText(q.tema || "", term)}</div>
+        <div style="margin-bottom:10px;"><strong>Pregunta:</strong> ${highlightBankSearchText(q.pregunta || "", term)}</div>
         <div>
           <div><strong>Respuestas:</strong></div>
-          <div style="${q.respuesta_correcta === 0 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">A) ${escapeHtml(q.opciones?.[0] ?? "")}</div>
-          <div style="${q.respuesta_correcta === 1 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">B) ${escapeHtml(q.opciones?.[1] ?? "")}</div>
-          <div style="${q.respuesta_correcta === 2 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">C) ${escapeHtml(q.opciones?.[2] ?? "")}</div>
-          <div style="${q.respuesta_correcta === 3 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">D) ${escapeHtml(q.opciones?.[3] ?? "")}</div>
-          <div style="margin-top:6px;"><strong>Explicación:</strong> ${escapeHtml(q.explicacion || "")}</div>
+          <div style="${q.respuesta_correcta === 0 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">A) ${highlightBankSearchText(q.opciones?.[0] ?? "", term)}</div>
+          <div style="${q.respuesta_correcta === 1 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">B) ${highlightBankSearchText(q.opciones?.[1] ?? "", term)}</div>
+          <div style="${q.respuesta_correcta === 2 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">C) ${highlightBankSearchText(q.opciones?.[2] ?? "", term)}</div>
+          <div style="${q.respuesta_correcta === 3 ? "color:var(--accent-success);text-decoration:underline 2px var(--accent-success);text-underline-offset:3px;" : ""}">D) ${highlightBankSearchText(q.opciones?.[3] ?? "", term)}</div>
+          <div style="margin-top:6px;"><strong>Explicación:</strong> ${highlightBankSearchText(q.explicacion || "", term)}</div>
         </div>
         <div class="row" style="margin-top:10px;">
           <button data-edit="${q.id}" class="secondary">Editar</button>
@@ -7437,6 +7735,21 @@ function escapeHtmlAttr(str) {
   return escapeHtml(str).replaceAll("\n", " ");
 }
 
+function escapeRegex(str) {
+  return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightBankSearchText(text, rawTerm) {
+  const source = String(text ?? "");
+  const term = String(rawTerm || "").trim();
+  if (!term) return escapeHtml(source);
+  const re = new RegExp(`(${escapeRegex(term)})`, "ig");
+  const parts = source.split(re);
+  return parts
+    .map((part, idx) => (idx % 2 === 1 ? `<mark class="bank-hit">${escapeHtml(part)}</mark>` : escapeHtml(part)))
+    .join("");
+}
+
 // Escapa valores para usarlos dentro de selectores CSS (querySelector/querySelectorAll)
 function cssEscape(val) {
   const s = String(val ?? "");
@@ -7670,61 +7983,23 @@ document.addEventListener("keydown", e => {
 });
 
 function initMobilePortraitLock() {
-  const overlay = document.getElementById("orientation-lock-overlay");
-  const isLikelyMobile = () => !!(
-    window.matchMedia &&
-    window.matchMedia("(pointer: coarse) and (hover: none)").matches
-  );
-  const isLandscapeNow = () => {
-    if (window.matchMedia && window.matchMedia("(orientation: landscape)").matches) return true;
-    return window.innerWidth > window.innerHeight;
-  };
-
   const tryLockPortrait = () => {
     const orientation = screen && screen.orientation;
     if (!orientation || typeof orientation.lock !== "function") return;
     orientation.lock("portrait").catch(() => {});
   };
 
-  const updateOrientationLockState = () => {
-    const mobile = isLikelyMobile();
-    const splashVisible = !!(
-      appSplash &&
-      appSplash.style.display !== "none" &&
-      !appSplash.classList.contains("is-hidden")
-    );
-    const lockActive = mobile && isLandscapeNow() && !splashVisible;
+  // Limpieza por si en una versión anterior se activó el overlay de orientación.
+  if (document.body) document.body.classList.remove("orientation-lock-active");
 
-    if (document.body) {
-      document.body.classList.toggle("orientation-lock-active", lockActive);
-    }
-    if (overlay) {
-      overlay.setAttribute("aria-hidden", lockActive ? "false" : "true");
-    }
-  };
-
-  window.addEventListener("resize", updateOrientationLockState, { passive: true });
-  window.addEventListener("orientationchange", () => {
-    tryLockPortrait();
-    setTimeout(updateOrientationLockState, 60);
-  }, { passive: true });
+  window.addEventListener("orientationchange", tryLockPortrait, { passive: true });
+  window.addEventListener("resize", tryLockPortrait, { passive: true });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       tryLockPortrait();
-      updateOrientationLockState();
     }
   });
-  if (appSplash && typeof MutationObserver === "function") {
-    const splashObserver = new MutationObserver(() => {
-      updateOrientationLockState();
-    });
-    splashObserver.observe(appSplash, {
-      attributes: true,
-      attributeFilter: ["class", "style"]
-    });
-  }
   tryLockPortrait();
-  updateOrientationLockState();
 }
 
 initMobilePortraitLock();
