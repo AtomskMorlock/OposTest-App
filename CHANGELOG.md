@@ -1,3 +1,4 @@
+0.7.1 - Fix de repaso Difíciles: botón y subpanel en Home, marcador de bandera en test (blanco/rojo) y ajustes de navegación/estado.
 0.7.0 - Mejoras de UX en Personalizado y Home: barras de progreso visual por tema y global, ajustes de layout/alineación, botones de navegación rápida, y mejoras de interacción para descartar respuestas por gesto.
 0.6.3 - Ajustes de interfaz y correcciones de interacción: flechas en Personalizado, mejoras de marcado por deslizamiento en respuestas y limpieza de contenido de prueba.
 0.6.2 - Fix de layout móvil en test (bloques largos y anclaje de controles), correcciones de splash/orientación al recargar y limpieza de enunciados ambiguos en cuestionarios.

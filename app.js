@@ -21,6 +21,7 @@ const LS_STATS = "chatgpt_stats_v1";
 const LS_HISTORY = "chatgpt_history_v1";
 const LS_PENDING_REVIEW = "chatgpt_pending_review_v1";
 const LS_PENDING_REVIEW_DONE = "chatgpt_pending_review_done_v1";
+const LS_DIFFICULT = "chatgpt_difficult_v1";
 const LS_ACTIVE_PAUSED_TEST = "chatgpt_active_paused_test_v1";
 const LS_DELETED_IDS = "chatgpt_deleted_ids_v1";
 const LS_TTS_SETTINGS = "chatgpt_tts_settings_v1";
@@ -49,6 +50,7 @@ function migrateLocalStorageChariToChatGPT() {
     ["chari_history_v1", LS_HISTORY],
     ["chari_pending_review_v1", LS_PENDING_REVIEW],
     ["chari_pending_review_done_v1", LS_PENDING_REVIEW_DONE],
+    ["chari_difficult_v1", LS_DIFFICULT],
     ["chari_active_paused_test_v1", LS_ACTIVE_PAUSED_TEST],
     ["chari_deleted_ids_v1", LS_DELETED_IDS],
     ["chari_tts_settings_v1", LS_TTS_SETTINGS],
@@ -124,6 +126,7 @@ migrateLocalStorageChariToChatGPT();
 
   sanitizeIdArray(LS_PENDING_REVIEW);
   sanitizeIdArray(LS_PENDING_REVIEW_DONE);
+  sanitizeIdArray(LS_DIFFICULT);
   sanitizeIdArray(LS_DELETED_IDS);
 
   // ✅ NUEVO: sanea también las purgadas
@@ -279,6 +282,7 @@ const answersContainer = document.getElementById("answers-container");
 const testBottom = document.getElementById("test-bottom");
 const testContentScroll = document.getElementById("test-content-scroll");
 const testActionsFixed = document.getElementById("test-actions-fixed");
+const difficultFlagBtn = document.getElementById("difficult-flag-btn");
 const continueBtn = document.getElementById("continue-btn");
 const noSeBtn = document.getElementById("no-btn");
 const timerDisplay = document.getElementById("timer");
@@ -2473,6 +2477,47 @@ function getPendingDoneSet() {
 function setPendingDoneSet(setObj) {
   lsSetIdArray(LS_PENDING_REVIEW_DONE, setObj);
 }
+function getDifficultSet() {
+  return new Set(lsGetIdArray(LS_DIFFICULT));
+}
+function setDifficultSet(setObj) {
+  lsSetIdArray(LS_DIFFICULT, setObj);
+}
+
+function isCurrentQuestionDifficult() {
+  const q = currentTest && currentTest[currentIndex];
+  if (!q) return false;
+  const difficult = getDifficultSet();
+  return difficult.has(String(q.id));
+}
+
+function updateDifficultFlagButtonUi() {
+  if (!difficultFlagBtn) return;
+  const q = currentTest && currentTest[currentIndex];
+  if (!q) {
+    difficultFlagBtn.classList.remove("is-marked");
+    difficultFlagBtn.setAttribute("aria-pressed", "false");
+    difficultFlagBtn.disabled = true;
+    return;
+  }
+  const marked = isCurrentQuestionDifficult();
+  difficultFlagBtn.classList.toggle("is-marked", marked);
+  difficultFlagBtn.setAttribute("aria-pressed", marked ? "true" : "false");
+  difficultFlagBtn.title = marked ? "Quitar de difíciles" : "Marcar como difícil";
+  difficultFlagBtn.setAttribute("aria-label", difficultFlagBtn.title);
+  difficultFlagBtn.disabled = false;
+}
+
+function toggleCurrentQuestionDifficult() {
+  const q = currentTest && currentTest[currentIndex];
+  if (!q) return;
+  const id = String(q.id);
+  const difficult = getDifficultSet();
+  if (difficult.has(id)) difficult.delete(id);
+  else difficult.add(id);
+  setDifficultSet(difficult);
+  updateDifficultFlagButtonUi();
+}
 
 // --- acciones ---
 function markPending(id) {
@@ -2507,12 +2552,14 @@ function prunePendingGhostIds() {
 
   const pending = getPendingReviewSet();
   const done = getPendingDoneSet();
+  const difficult = getDifficultSet();
 
   let changed = false;
 
   // Normaliza internamente (por si venían números)
   const normalizedPending = new Set(Array.from(pending).map(normId));
   const normalizedDone = new Set(Array.from(done).map(normId));
+  const normalizedDifficult = new Set(Array.from(difficult).map(normId));
 
   // limpia pending
   for (const id of Array.from(normalizedPending)) {
@@ -2538,9 +2585,18 @@ function prunePendingGhostIds() {
     }
   }
 
+  // limpia difficult
+  for (const id of Array.from(normalizedDifficult)) {
+    if (!existing.has(id)) {
+      normalizedDifficult.delete(id);
+      changed = true;
+    }
+  }
+
   if (changed) {
     setPendingReviewSet(normalizedPending);
     setPendingDoneSet(normalizedDone);
+    setDifficultSet(normalizedDifficult);
   }
 }
 
@@ -2825,6 +2881,7 @@ function openHomeStartPanel() {
   closeHomeExamPanel();
   closeHomeClockPanel();
   closeHomeReviewPanel();
+  closeHomeDifficultPanel();
   const row = document.getElementById("main-primary-row");
   const panel = document.getElementById("home-start-panel");
   if (!row || !panel) return;
@@ -2847,6 +2904,7 @@ function closeHomeStartPanel() {
   closeHomeExamPanel();
   closeHomeClockPanel();
   closeHomeReviewPanel();
+  closeHomeDifficultPanel();
   const row = document.getElementById("main-primary-row");
   const panel = document.getElementById("home-start-panel");
   if (!row || !panel) return;
@@ -2867,6 +2925,7 @@ function openHomeQuickPanel() {
   closeHomeExamPanel();
   closeHomeClockPanel();
   closeHomeReviewPanel();
+  closeHomeDifficultPanel();
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-quick-row");
   const panel = document.getElementById("home-quick-panel");
@@ -2899,6 +2958,7 @@ function openHomeExamPanel() {
   closeHomeQuickPanel();
   closeHomeClockPanel();
   closeHomeReviewPanel();
+  closeHomeDifficultPanel();
   closeHomeExamBlockPanel();
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-exam-row");
@@ -2957,6 +3017,7 @@ function openHomeClockPanel() {
   closeHomeExamPanel();
   closeHomeQuickPanel();
   closeHomeReviewPanel();
+  closeHomeDifficultPanel();
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-clock-row");
   const panel = document.getElementById("home-clock-panel");
@@ -2989,6 +3050,7 @@ function openHomeReviewPanel() {
   closeHomeExamPanel();
   closeHomeQuickPanel();
   closeHomeClockPanel();
+  closeHomeDifficultPanel();
   const mainRow = document.getElementById("main-primary-row");
   const row = document.getElementById("home-review-row");
   const panel = document.getElementById("home-review-panel");
@@ -3008,6 +3070,41 @@ function closeHomeReviewPanel() {
   const row = document.getElementById("home-review-row");
   const panel = document.getElementById("home-review-panel");
   if (panel) {
+    const fromPx = Math.max(44, Number.parseFloat(getComputedStyle(row).maxHeight) || row.scrollHeight || 44);
+    const toPx = 44;
+    applyHomeExpandTiming(row, fromPx, toPx);
+    applyHomeExpandTiming(panel, fromPx, toPx);
+  }
+  if (mainRow) mainRow.classList.remove("is-review-open");
+  if (!row || !panel) return;
+  row.classList.remove("is-review-open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function openHomeDifficultPanel() {
+  closeHomeExamPanel();
+  closeHomeQuickPanel();
+  closeHomeClockPanel();
+  closeHomeReviewPanel();
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-difficult-row");
+  const panel = document.getElementById("home-difficult-panel");
+  if (!row || !panel) return;
+  const fromPx = 44;
+  const toPx = Math.max(fromPx + 80, fromPx + panel.scrollHeight + 16);
+  applyHomeExpandTiming(row, fromPx, toPx);
+  applyHomeExpandTiming(panel, fromPx, toPx);
+  row.style.setProperty("--home-row-open-height-review", `${toPx}px`);
+  if (mainRow) mainRow.classList.add("is-review-open");
+  row.classList.add("is-review-open");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeHomeDifficultPanel() {
+  const mainRow = document.getElementById("main-primary-row");
+  const row = document.getElementById("home-difficult-row");
+  const panel = document.getElementById("home-difficult-panel");
+  if (panel && row) {
     const fromPx = Math.max(44, Number.parseFloat(getComputedStyle(row).maxHeight) || row.scrollHeight || 44);
     const toPx = 44;
     applyHomeExpandTiming(row, fromPx, toPx);
@@ -3162,6 +3259,11 @@ function showMainMenu() {
     const s = String(id);
     if (existing.has(s) && !done.has(s)) pendingCount++;
   }
+  const difficultSet = getDifficultSet();
+  let difficultCount = 0;
+  for (const id of difficultSet) {
+    if (existing.has(String(id))) difficultCount++;
+  }
 
   // Barra global de progreso (home): verde = vistas no pendientes, rojo = pendientes, blanco = no vistas
   if (homeGlobalProgressEl && homeGlobalProgressOkEl && homeGlobalProgressBadEl && homeGlobalProgressEmptyEl) {
@@ -3200,12 +3302,16 @@ function showMainMenu() {
   }
 
   const reviewPreset = getHomeReviewPreset(pendingCount);
+  const difficultPreset = getHomeReviewPreset(difficultCount);
   const clockBest1m = getClockBest("clock-1m");
   const clockBest5m = getClockBest("clock-5m");
   const survivalBest = getClockBest("survival");
   const examBlocks = getAvailableExamBlocks();
   const reviewQuickButtonsHtml = reviewPreset.counts
     .map(n => `<button type="button" class="secondary home-review-option" data-limit="${n}">${n}</button>`)
+    .join("");
+  const difficultQuickButtonsHtml = difficultPreset.counts
+    .map(n => `<button type="button" class="secondary home-difficult-option" data-limit="${n}">${n}</button>`)
     .join("");
   const examBlockButtonsHtml = examBlocks
     .map(b => `<button type="button" class="secondary home-exam-block-option" data-block="${escapeHtml(String(b))}">${escapeHtml(String(b))}</button>`)
@@ -3242,6 +3348,16 @@ function showMainMenu() {
               <div class="row home-review-buttons">
                 ${reviewQuickButtonsHtml}
                 <button type="button" class="secondary home-review-option" data-limit="all" ${pendingCount === 0 ? "disabled" : ""}>Todas</button>
+              </div>
+            </div>
+          </div>
+          <div class="row home-start-row single" id="home-difficult-row">
+            <button id="home-btn-difficult" class="secondary home-start-option">Difíciles 🚩 (${difficultCount})</button>
+            <div id="home-difficult-panel" class="home-review-panel" aria-hidden="true">
+              <div class="home-review-panel-title">Difíciles 🚩 (${difficultCount})</div>
+              <div class="row home-review-buttons">
+                ${difficultQuickButtonsHtml}
+                <button type="button" class="secondary home-difficult-option" data-limit="all" ${difficultCount === 0 ? "disabled" : ""}>Todas</button>
               </div>
             </div>
           </div>
@@ -3398,6 +3514,27 @@ function showMainMenu() {
       startReviewPending(Number.isFinite(limit) && limit > 0 ? limit : null);
     };
   });
+  const homeBtnDifficult = document.getElementById("home-btn-difficult");
+  if (homeBtnDifficult) homeBtnDifficult.onclick = () => {
+    scheduleHomeAction(() => {
+      if (difficultCount === 0) {
+        startDifficultReview();
+        return;
+      }
+      const row = document.getElementById("home-difficult-row");
+      if (row && row.classList.contains("is-review-open")) closeHomeDifficultPanel();
+      else openHomeDifficultPanel();
+    });
+  };
+  const homeDifficultQuickButtons = document.querySelectorAll(".home-difficult-option");
+  homeDifficultQuickButtons.forEach(btn => {
+    btn.onclick = () => {
+      const limitRaw = btn.getAttribute("data-limit");
+      const limit = limitRaw === "all" ? null : Number(limitRaw);
+      closeHomeStartPanel();
+      startDifficultReview(Number.isFinite(limit) && limit > 0 ? limit : null);
+    };
+  });
   const homeBtnExam = document.getElementById("home-btn-exam");
   if (homeBtnExam) homeBtnExam.onclick = () => {
     scheduleHomeAction(() => {
@@ -3439,7 +3576,7 @@ function showMainMenu() {
     const delay = `${idx * 70}ms`;
     btn.style.setProperty("--home-delay", delay);
     const row = btn.closest(".home-start-row");
-    if (row && (row.id === "home-quick-row" || row.id === "home-exam-row" || row.id === "home-clock-row" || row.id === "home-review-row")) {
+    if (row && (row.id === "home-quick-row" || row.id === "home-exam-row" || row.id === "home-clock-row" || row.id === "home-review-row" || row.id === "home-difficult-row")) {
       row.style.setProperty("--home-row-delay", delay);
     }
   });
@@ -3652,6 +3789,7 @@ function showTestScreen() {
   setUiScreenState("test");
   testContainer.style.display = "";
   ensurePauseAndFinishUI();
+  updateDifficultFlagButtonUi();
   ensureTestBottomClearanceObserver();
   scheduleTestAnswerDockingUpdate();
   updateModePill();
@@ -5247,6 +5385,36 @@ function startReviewPending(limitCount = null) {
   });
 }
 
+function startDifficultReview(limitCount = null) {
+  prunePendingGhostIds();
+
+  const existing = getExistingIdSet();
+  const difficult = getDifficultSet();
+  const ids = Array.from(difficult).filter(id => existing.has(String(id)));
+
+  const idSet = new Set(ids.map(String));
+  let pool = (questions || []).filter(q => idSet.has(String(q.id)));
+
+  if (pool.length === 0) {
+    showAlert("No tienes preguntas marcadas como difíciles");
+    return;
+  }
+
+  mode = "difficult";
+  shuffleArray(pool);
+  const limit = Number(limitCount);
+  if (Number.isFinite(limit) && limit > 0) {
+    pool = pool.slice(0, Math.min(limit, pool.length));
+  }
+
+  startSession(pool, {
+    mode: "difficult",
+    timeSeconds: pool.length * 60,
+    countNonAnsweredAsWrongOnFinish: false,
+    meta: {}
+  });
+}
+
 // =======================
 // INICIO SESIÓN
 // =======================
@@ -5582,6 +5750,7 @@ function renderQuestionWithOptions(q, opcionesOrdenadas) {
     answersContainer.appendChild(btn);
   });
 
+  updateDifficultFlagButtonUi();
   scheduleTestBottomScrollClearanceUpdate();
   scheduleTestAnswerDockingUpdate();
   updateProgressUI();
@@ -5783,6 +5952,7 @@ function showAnswer(q, selectedTextOrNull) {
   buttons.forEach(btn => {
     btn.onclick = continueFromFeedback;
   });
+  updateDifficultFlagButtonUi();
   scheduleTestBottomScrollClearanceUpdate();
   scheduleTestAnswerDockingUpdate();
 }
@@ -7932,6 +8102,7 @@ exportJsonBtn.onclick = () => exportQuestionsJSON();
 backToMenuBtnResults.onclick = showMainMenu;
 
 noSeBtn.onclick = onNoSe;
+if (difficultFlagBtn) difficultFlagBtn.onclick = () => toggleCurrentQuestionDifficult();
 
 btnImportQuestions.onclick = importQuestionsFromTextarea;
 btnClearImport.onclick = clearImportTextarea;

@@ -81,7 +81,30 @@
     #mode-pill { display: none; }
     #test-progress .progress-bar { width: min(420px, 70vw); height: 10px; background: var(--progress-track); border-radius: 999px; overflow: hidden; }
     #test-progress .progress-bar-fill { height: 100%; background: var(--progress-fill); width: 0%; }
-    #progress-text { min-width: 70px; text-align: right; font-weight: bold; }
+    #test-top-right { min-width: 94px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+    #progress-text { min-width: 56px; text-align: right; font-weight: bold; }
+    #difficult-flag-btn {
+      width: 28px !important;
+      min-width: 28px !important;
+      height: 28px !important;
+      min-height: 28px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border-radius: 8px !important;
+      border: 1px solid var(--border) !important;
+      background: var(--surface) !important;
+      color: var(--muted) !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px !important;
+      line-height: 1;
+    }
+    #difficult-flag-btn.is-marked {
+      background: #d95b63 !important;
+      border-color: #cc4b56 !important;
+      color: #ffffff !important;
+    }
     #test-controls-row { flex-wrap: nowrap; justify-content: center; align-items: center; gap: 8px; }
     #test-controls-row #no-btn,
     #test-controls-row #pause-btn {
@@ -185,7 +208,8 @@
       .review-item { height: auto; max-height: none; overflow: visible; padding: 10px; margin: 10px 0; }
       #test-top-row { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "timer progress" "bar bar"; align-items: center; gap: 6px; }
       #timer { grid-area: timer; text-align: left; font-size: 14px; width: auto; }
-      #progress-text { grid-area: progress; text-align: right; font-size: 14px; width: auto; }
+      #test-top-right { grid-area: progress; justify-self: end; min-width: 0; }
+      #progress-text { text-align: right; font-size: 14px; width: auto; min-width: 0; }
       #test-progress { grid-area: bar; }
       #test-progress { width: 100%; }
     #test-progress .progress-bar { width: 100%; }
@@ -435,7 +459,10 @@
     <div id="test-progress" class="small">
       <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
     </div>
-    <div id="progress-text">0/0</div>
+    <div id="test-top-right">
+      <div id="progress-text">0/0</div>
+      <button id="difficult-flag-btn" type="button" aria-label="Marcar como difícil" title="Marcar como difícil">⚑</button>
+    </div>
   </div>
   <div class="small" id="mode-pill" style="display:none;"></div>
 
