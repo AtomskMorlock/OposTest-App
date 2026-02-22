@@ -317,6 +317,8 @@ let testBottomResizeObserver = null;
 let testBottomResizeRaf = null;
 let testAnswerDockRaf = null;
 let pendingFinishReason = null;
+const APP_BOOT_TS = Date.now();
+const STREAK_MIN_DAILY_CORRECT = 5;
 let customJumpTopScrollHandler = null;
 const voiceSettingsBtn = document.getElementById("btn-voice-settings");
 const voiceSettingsBackBtn = document.getElementById("btn-voice-back");
@@ -2228,28 +2230,73 @@ function getDebugHomeStreakOverrideDays() {
   }
 }
 
-function buildHomeLastTestInfo(entries) {
-  const debugStreak = getDebugHomeStreakOverrideDays();
-  if (debugStreak !== null) {
-    return {
-      displayText: `Racha: ${debugStreak} ${debugStreak === 1 ? "día" : "días"}`,
-      subText: "Simulación",
-      isStreak: debugStreak > 0,
-      streakDays: debugStreak,
-      daysAgo: 0
-    };
+function getDebugHomeStreakPendingToday() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const raw = String(params.get("debug_streak_pending") || "").trim().toLowerCase();
+    return raw === "1" || raw === "true" || raw === "yes" || raw === "si";
+  } catch {
+    return false;
   }
+}
 
-  const rows = asArray(entries)
+function getFinishedHistoryRows(entries) {
+  return asArray(entries)
     .filter(e => e && e.finished !== false)
     .filter(e => ((Number(e?.correct) || 0) + (Number(e?.wrong) || 0) + (Number(e?.noSe) || 0)) > 0)
     .map(e => {
       const d = new Date(e.date);
       const serial = getLocalDaySerial(d);
       if (!d || isNaN(d) || serial === null) return null;
-      return { ts: d.getTime(), day: serial };
+      return {
+        ts: d.getTime(),
+        day: serial,
+        correct: Math.max(0, Number(e?.correct) || 0)
+      };
     })
     .filter(Boolean);
+}
+
+function aggregateHistoryRowsByDay(rows) {
+  const byDay = new Map();
+  for (const row of asArray(rows)) {
+    const day = Number(row?.day);
+    if (!Number.isFinite(day)) continue;
+    const prev = byDay.get(day) || { correct: 0, lastTs: 0 };
+    prev.correct += Math.max(0, Number(row?.correct) || 0);
+    prev.lastTs = Math.max(prev.lastTs, Number(row?.ts) || 0);
+    byDay.set(day, prev);
+  }
+  return byDay;
+}
+
+function buildHomeLastTestInfo(entries) {
+  const rows = getFinishedHistoryRows(entries);
+  const byDay = aggregateHistoryRowsByDay(rows);
+  const todaySerial = getLocalDaySerial(new Date());
+  const todayCorrect = Number(byDay.get(Number(todaySerial))?.correct || 0);
+  const todayReachedStreakMin = todayCorrect >= STREAK_MIN_DAILY_CORRECT;
+
+  const debugStreak = getDebugHomeStreakOverrideDays();
+  if (debugStreak !== null) {
+    const debugPending = getDebugHomeStreakPendingToday();
+    const todayCorrectSinceBoot = rows
+      .filter(r => Number(r.day) === Number(todaySerial) && Number(r.ts) >= APP_BOOT_TS)
+      .reduce((acc, r) => acc + Math.max(0, Number(r?.correct) || 0), 0);
+    const countTodayForDebug = debugPending
+      ? todayCorrectSinceBoot >= STREAK_MIN_DAILY_CORRECT
+      : todayReachedStreakMin;
+    const shownStreak = Math.max(0, Number(debugStreak) + (countTodayForDebug ? 1 : 0));
+
+    return {
+      displayText: `Racha: ${shownStreak} ${shownStreak === 1 ? "día" : "días"}`,
+      subText: "Simulación",
+      isStreak: shownStreak > 0,
+      streakDays: shownStreak,
+      streakPendingToday: debugPending && !countTodayForDebug,
+      daysAgo: 0
+    };
+  }
 
   if (!rows.length) {
     return {
@@ -2257,45 +2304,72 @@ function buildHomeLastTestInfo(entries) {
       subText: "Sin tests finalizados",
       isStreak: false,
       streakDays: 0,
+      streakPendingToday: false,
       daysAgo: null
     };
   }
 
   const last = rows.reduce((best, cur) => (cur.ts > best.ts ? cur : best), rows[0]);
-  const todaySerial = getLocalDaySerial(new Date());
   const daysAgo = Math.max(0, Number(todaySerial) - Number(last.day));
 
-  const daySet = new Set(rows.map(r => r.day));
-  let streak = 0;
-  if (daySet.has(todaySerial)) {
-    for (let d = todaySerial; daySet.has(d); d -= 1) streak += 1;
+  const qualifiedDaySet = new Set(
+    Array.from(byDay.entries())
+      .filter(([, agg]) => Number(agg?.correct || 0) >= STREAK_MIN_DAILY_CORRECT)
+      .map(([day]) => Number(day))
+  );
+
+  let streakToday = 0;
+  if (qualifiedDaySet.has(Number(todaySerial))) {
+    for (let d = Number(todaySerial); qualifiedDaySet.has(d); d -= 1) streakToday += 1;
   }
 
-  if (streak > 0) {
+  if (streakToday > 0) {
     return {
-      displayText: `Racha: ${streak} ${streak === 1 ? "día" : "días"}`,
+      displayText: `Racha: ${streakToday} ${streakToday === 1 ? "día" : "días"}`,
       subText: "",
       isStreak: true,
-      streakDays: streak,
+      streakDays: streakToday,
+      streakPendingToday: false,
+      daysAgo
+    };
+  }
+
+  const yesterdaySerial = Number(todaySerial) - 1;
+  let streakUntilYesterday = 0;
+  if (qualifiedDaySet.has(yesterdaySerial)) {
+    for (let d = yesterdaySerial; qualifiedDaySet.has(d); d -= 1) streakUntilYesterday += 1;
+  }
+
+  if (streakUntilYesterday > 0) {
+    return {
+      displayText: `Racha: ${streakUntilYesterday} ${streakUntilYesterday === 1 ? "día" : "días"}`,
+      subText: "",
+      isStreak: true,
+      streakDays: streakUntilYesterday,
+      streakPendingToday: true,
       daysAgo
     };
   }
 
   return {
     displayText: "Racha: 0 días",
-    subText: `Último test hace ${daysAgo} ${daysAgo === 1 ? "día" : "días"}`,
+    subText: daysAgo === 0 && todayCorrect > 0
+      ? `Hoy: ${todayCorrect}/${STREAK_MIN_DAILY_CORRECT} aciertos para racha`
+      : `Último test hace ${daysAgo} ${daysAgo === 1 ? "día" : "días"}`,
     isStreak: false,
     streakDays: 0,
+    streakPendingToday: false,
     daysAgo
   };
 }
 
 function buildHomeStreakCardHtml(info) {
   const streakDays = Math.max(0, Number(info?.streakDays) || 0);
+  const streakPendingToday = !!info?.streakPendingToday;
   const onCount = Math.min(7, streakDays);
   const isMaxStreak = streakDays >= 7;
   const flames = Array.from({ length: 7 }, (_, i) => {
-    const cls = i < onCount ? "is-on" : "is-off";
+    const cls = i < onCount ? (streakPendingToday ? "is-pending" : "is-on") : "is-off";
     return `<span class="streak-flame ${cls}" aria-hidden="true">🔥</span>`;
   }).join("");
   const subText = String(info?.subText || "").trim();
@@ -2482,6 +2556,17 @@ function getDifficultSet() {
 }
 function setDifficultSet(setObj) {
   lsSetIdArray(LS_DIFFICULT, setObj);
+}
+
+function isUserQuestionEntry(q) {
+  const id = String(q?.id || "").trim();
+  const fuente = String(q?.fuente || "").trim().toLowerCase();
+  return (
+    id.startsWith("Usuario.Manual.") ||
+    id.startsWith("Usuario.Conjunto.") ||
+    fuente === "usuario manual" ||
+    fuente === "usuario conjunto"
+  );
 }
 
 function isCurrentQuestionDifficult() {
@@ -2697,23 +2782,22 @@ function applyDeletedFilter() {
   lsSetJSON(LS_PURGED_IDS, Array.from(purgedSet));
 }
 
-function refreshDbCountPill() {
-  const extra = loadExtraQuestions();
-  const baseIdSet = new Set(
-    (Array.isArray(questionsBase) ? questionsBase : []).map(q => String(q.id))
-  );
-  // "Añadidas" solo cuenta preguntas nuevas (ID no existente en base).
-  const addedCount = extra.reduce((acc, q) => {
-    return acc + (baseIdSet.has(String(q?.id)) ? 0 : 1);
-  }, 0);
+function refreshDbCountPill(currentCount = null, totalCount = null) {
+  if (!dbCountPill) return;
 
-  if (addedCount > 0) {
-    dbCountPill.textContent =
-      `Preguntas en el banco: ${questions.length} ` +
-      `(base ${questionsBase.length} + añadidas ${addedCount})`;
+  const safeTotal = Number.isFinite(Number(totalCount))
+    ? Math.max(0, Number(totalCount))
+    : Math.max(0, Array.isArray(questions) ? questions.length : 0);
+  const safeCurrent = Number.isFinite(Number(currentCount))
+    ? Math.max(0, Number(currentCount))
+    : safeTotal;
+
+  if (safeCurrent !== safeTotal) {
+    dbCountPill.textContent = `Preguntas: ${safeCurrent}/${safeTotal}`;
     return;
   }
-  dbCountPill.textContent = `Preguntas en el banco: ${questions.length}`;
+
+  dbCountPill.textContent = `Preguntas: ${safeTotal}`;
 }
 
 // =======================
@@ -3497,7 +3581,7 @@ function showMainMenu() {
   if (homeBtnReview) homeBtnReview.onclick = () => {
     scheduleHomeAction(() => {
       if (pendingCount === 0) {
-        startReviewPending();
+        promptHistoricFailedQuickReview();
         return;
       }
       const row = document.getElementById("home-review-row");
@@ -3689,7 +3773,10 @@ function showMainMenu() {
   }
 
   const btnReview = document.getElementById("btn-review");
-  if (btnReview) btnReview.onclick = () => startReviewPending();
+  if (btnReview) btnReview.onclick = () => {
+    if (getPendingRealCount() > 0) startReviewPending();
+    else promptHistoricFailedQuickReview();
+  };
   const btnExam = document.getElementById("btn-exam");
   if (btnExam) btnExam.onclick = () => {
     closeTestStartModal();
@@ -5385,6 +5472,56 @@ function startReviewPending(limitCount = null) {
   });
 }
 
+function getHistoricallyFailedPool() {
+  mergeQuestions();
+  applyDeletedFilter();
+  prunePendingGhostIds();
+
+  const existing = getExistingIdSet();
+  const stats = getStats();
+  const failedEverIds = new Set(
+    Object.entries(stats || {})
+      .filter(([id, s]) => existing.has(String(id)) && (Number(s?.wrong) || 0) > 0)
+      .map(([id]) => String(id))
+  );
+
+  return (questions || []).filter(q => failedEverIds.has(String(q?.id)));
+}
+
+function startHistoricFailedQuickReview() {
+  let pool = getHistoricallyFailedPool();
+  if (!pool.length) {
+    showAlert("No tienes preguntas falladas históricas para repasar.");
+    return;
+  }
+
+  shuffleArray(pool);
+  const selected = pool.slice(0, Math.min(10, pool.length));
+  mode = "review-historic";
+  closeHomeStartPanel();
+
+  startSession(selected, {
+    mode: "review-historic",
+    timeSeconds: 10 * 60,
+    countNonAnsweredAsWrongOnFinish: true,
+    meta: { reviewHistoric: true, quick: true, count: 10, minutes: 10 }
+  });
+}
+
+async function promptHistoricFailedQuickReview() {
+  const pool = getHistoricallyFailedPool();
+  if (!pool.length) {
+    await showAlert("No tienes preguntas falladas históricas para repasar.");
+    return;
+  }
+  const ok = await showConfirm(
+    "No tienes fallos pendientes.\n¿Quieres hacer 10 preguntas aleatorias entre las que has fallado alguna vez?",
+    { title: "Fallos", confirmText: "Aceptar", cancelText: "Cancelar" }
+  );
+  if (!ok) return;
+  startHistoricFailedQuickReview();
+}
+
 function startDifficultReview(limitCount = null) {
   prunePendingGhostIds();
 
@@ -6391,20 +6528,96 @@ function exportLastTestText(modeExport) {
 // =======================
 // EXPORT JSON (base + añadidas - eliminadas)
 // =======================
-function exportQuestionsJSON() {
-  mergeQuestions();
-  applyDeletedFilter();
+const EXPORT_CLIPBOARD_MAX_BYTES = 700 * 1024; // ~700 KB
 
-  const payload = JSON.stringify(questions, null, 2);
+function getUtf8ByteLength(text) {
+  const value = String(text || "");
+  try {
+    return new TextEncoder().encode(value).length;
+  } catch (_) {
+    return unescape(encodeURIComponent(value)).length;
+  }
+}
+
+function formatBytesCompact(bytes) {
+  const n = Math.max(0, Number(bytes) || 0);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function downloadJsonText(payload, filename) {
   const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `questions_export_${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+async function shareJsonTextIfSupported(payload, filename) {
+  const canShareFiles =
+    typeof File !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function";
+  if (!canShareFiles) return false;
+
+  try {
+    const file = new File([payload], filename, { type: "application/json" });
+    if (!navigator.canShare({ files: [file] })) return false;
+    await navigator.share({
+      title: "Exportar preguntas",
+      text: "JSON de preguntas exportado.",
+      files: [file]
+    });
+    return true;
+  } catch (err) {
+    // Si el usuario cancela compartir, dejamos fallback a descarga.
+    return false;
+  }
+}
+
+async function exportQuestionsJSON() {
+  mergeQuestions();
+  applyDeletedFilter();
+
+  const payload = JSON.stringify(questions, null, 2);
+  const payloadBytes = getUtf8ByteLength(payload);
+  const filename = `questions_export_${new Date().toISOString().slice(0, 10)}.json`;
+  const canTryClipboard =
+    payloadBytes <= EXPORT_CLIPBOARD_MAX_BYTES &&
+    typeof navigator !== "undefined" &&
+    !!navigator.clipboard?.writeText &&
+    !!window.isSecureContext;
+
+  if (canTryClipboard) {
+    try {
+      await navigator.clipboard.writeText(payload);
+      await showAlert(`Preguntas copiadas al portapapeles (${formatBytesCompact(payloadBytes)}).`);
+      return;
+    } catch (_) {
+      // fallback a compartir/descargar
+    }
+  }
+
+  const shared = await shareJsonTextIfSupported(payload, filename);
+  if (!shared) {
+    downloadJsonText(payload, filename);
+  }
+
+  if (payloadBytes > EXPORT_CLIPBOARD_MAX_BYTES) {
+    await showAlert(
+      `Exportación grande (${formatBytesCompact(payloadBytes)}).\nSe exportó como archivo JSON en lugar de copiar al portapapeles.`
+    );
+  } else {
+    await showAlert(
+      "No se pudo copiar al portapapeles en este dispositivo.\nSe exportó como archivo JSON."
+    );
+  }
 }
 
 // =======================
@@ -6971,6 +7184,7 @@ async function restoreQuestionsToFactory() {
 // =======================
 function showQuestionBank() {
   mode = "bank";
+  prunePendingGhostIds();
   showTestMenuScreen();
   setUiScreenState("bank");
   testMenu.classList.add("bank-theme");
@@ -6991,6 +7205,22 @@ function showQuestionBank() {
 
   const fuentes = [...new Set(questions.map(q => q.fuente || "Sin fuente"))]
     .sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
+  const existingIds = getExistingIdSet();
+  const pendingSet = getPendingReviewSet();
+  const doneSet = getPendingDoneSet();
+  let failedCount = 0;
+  for (const id of pendingSet) {
+    const s = String(id);
+    if (existingIds.has(s) && !doneSet.has(s)) failedCount++;
+  }
+  const difficultSet = getDifficultSet();
+  let difficultCount = 0;
+  for (const id of difficultSet) {
+    if (existingIds.has(String(id))) difficultCount++;
+  }
+  const userQuestionsCount = (Array.isArray(questions) ? questions : []).reduce((acc, q) => {
+    return acc + (isUserQuestionEntry(q) ? 1 : 0);
+  }, 0);
 
   testMenu.innerHTML = `
     <div class="row bank-top-head">
@@ -6999,17 +7229,23 @@ function showQuestionBank() {
       <button id="bank-jump-top" class="secondary" aria-label="Subir al inicio de resultados" title="Subir">↑</button>
     </div>
 
-    <div id="bank-actions-card" class="card">
-      <div id="bank-import-row" class="bank-import-row">
-        <button id="bank-import-questions" class="secondary">Importar preguntas</button>
-        <div id="bank-import-panel" class="bank-import-panel" aria-hidden="true">
-          <button id="bank-import-manual" class="secondary">Manual</button>
-          <button id="bank-import-batch" class="secondary">Conjunto</button>
+    <div id="bank-actions-card" class="card bank-inline-filter-card">
+      <div id="bank-actions-title" class="bank-inline-filter-title">Importar/Exportar</div>
+      <div id="bank-actions-wrap" class="bank-inline-filter-buttons bank-actions-content">
+        <div id="bank-import-row" class="bank-import-row">
+          <button id="bank-import-questions" class="secondary">Importar preguntas</button>
+          <div id="bank-import-panel" class="bank-import-panel" aria-hidden="true">
+            <button id="bank-import-manual" class="secondary">Manual</button>
+            <button id="bank-import-batch" class="secondary">Conjunto</button>
+          </div>
         </div>
-      </div>
-      <div class="row bank-actions-row bank-top-actions-row">
-        <button id="bank-trash" class="secondary">Papelera</button>
-        <button id="bank-restore-factory" class="secondary">RESTAURAR DE FÁBRICA</button>
+        <div class="row bank-actions-row">
+          <button id="bank-export-questions" class="secondary">Exportar preguntas</button>
+        </div>
+        <div class="row bank-actions-row bank-top-actions-row">
+          <button id="bank-trash" class="secondary">Papelera</button>
+          <button id="bank-restore-factory" class="secondary">RESTAURAR DE FÁBRICA</button>
+        </div>
       </div>
     </div>
 
@@ -7024,6 +7260,15 @@ function showQuestionBank() {
       <div id="bank-fuente-filter-title" class="bank-inline-filter-title">Fuente</div>
       <div id="bank-filter-fuente-wrap" class="row bank-inline-filter-buttons">
         ${fuentes.map(f => `<button type="button" class="success fuente-btn" data-fuente="${escapeHtml(f)}">${escapeHtml(f)}</button>`).join("")}
+      </div>
+    </div>
+
+    <div id="bank-category-filter-card" class="card bank-inline-filter-card">
+      <div id="bank-category-filter-title" class="bank-inline-filter-title">Filtrar</div>
+      <div id="bank-filter-category-wrap" class="row bank-inline-filter-buttons">
+        <button type="button" id="bank-filter-failed" class="secondary fuente-btn">Falladas ❌ (${failedCount})</button>
+        <button type="button" id="bank-filter-difficult" class="secondary fuente-btn">Difíciles 🚩 (${difficultCount})</button>
+        <button type="button" id="bank-filter-user" class="secondary fuente-btn">Preguntas del usuario (${userQuestionsCount})</button>
       </div>
     </div>
 
@@ -7069,6 +7314,9 @@ function showQuestionBank() {
   document.getElementById("bank-import-batch").onclick = () => {
     clearImportTextarea();
     showImportScreen("batch", showQuestionBank);
+  };
+  document.getElementById("bank-export-questions").onclick = () => {
+    exportQuestionsJSON();
   };
   document.getElementById("bank-trash").onclick = () => showTrashScreen();
   document.getElementById("bank-restore-factory").onclick = () => restoreQuestionsToFactory();
@@ -7127,7 +7375,9 @@ function showQuestionBank() {
     const ff = Array.from(document.querySelectorAll('#bank-filter-fuente-wrap .fuente-btn.success'))
       .map(btn => String(btn.getAttribute("data-fuente") || "").trim())
       .filter(Boolean);
-    const fm = "";
+    const filterFailedOn = !!document.getElementById("bank-filter-failed")?.classList.contains("success");
+    const filterDifficultOn = !!document.getElementById("bank-filter-difficult")?.classList.contains("success");
+    const filterUserOn = !!document.getElementById("bank-filter-user")?.classList.contains("success");
 
     let res = [...questions];
 
@@ -7144,10 +7394,35 @@ function showQuestionBank() {
       res = [];
     }
 
+    if (filterFailedOn || filterDifficultOn || filterUserOn) {
+      const failedIds = new Set();
+      const pendingNow = getPendingReviewSet();
+      const doneNow = getPendingDoneSet();
+      const existingNow = getExistingIdSet();
+      for (const id of pendingNow) {
+        const s = String(id);
+        if (existingNow.has(s) && !doneNow.has(s)) failedIds.add(s);
+      }
+      const difficultNow = getDifficultSet();
+      const difficultIds = new Set();
+      for (const id of difficultNow) {
+        const s = String(id);
+        if (existingNow.has(s)) difficultIds.add(s);
+      }
+      res = res.filter(q => {
+        const id = String(q.id);
+        const isFailed = failedIds.has(id);
+        const isDifficult = difficultIds.has(id);
+        const isUser = isUserQuestionEntry(q);
+        return (filterFailedOn && isFailed) || (filterDifficultOn && isDifficult) || (filterUserOn && isUser);
+      });
+    }
+
     if (term) {
       if (!searchTemaOn && !searchQaOn) {
         bankFilteredResults = [];
         bankPageIndex = 0;
+        refreshDbCountPill(0, questions.length);
         renderCurrentBankPage();
         return;
       }
@@ -7162,6 +7437,7 @@ function showQuestionBank() {
 
     bankFilteredResults = res;
     bankPageIndex = 0;
+    refreshDbCountPill(bankFilteredResults.length, questions.length);
     renderCurrentBankPage();
   };
 
@@ -7210,6 +7486,13 @@ function showQuestionBank() {
       runSearch();
     };
   });
+  document.querySelectorAll("#bank-filter-category-wrap .fuente-btn").forEach(btn => {
+    btn.onclick = () => {
+      const isActive = btn.classList.contains("success");
+      btn.className = isActive ? "secondary fuente-btn" : "success fuente-btn";
+      runSearch();
+    };
+  });
 
   const setupBankFilterCollapse = (cardId, titleId) => {
     const card = document.getElementById(cardId);
@@ -7234,6 +7517,8 @@ function showQuestionBank() {
   };
   setupBankFilterCollapse("bank-bloque-filter-card", "bank-bloque-filter-title");
   setupBankFilterCollapse("bank-fuente-filter-card", "bank-fuente-filter-title");
+  setupBankFilterCollapse("bank-category-filter-card", "bank-category-filter-title");
+  setupBankFilterCollapse("bank-actions-card", "bank-actions-title");
 
   syncBankSearchClear();
   runSearch();

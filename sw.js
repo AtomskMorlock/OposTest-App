@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "opostest";
-const STATIC_CACHE = `${CACHE_PREFIX}-static-v1`;
+const STATIC_CACHE = `${CACHE_PREFIX}-static-v2`;
 const DATA_CACHE = `${CACHE_PREFIX}-data-v1`;
 
 const SCOPE_URL = new URL(self.registration.scope);
@@ -10,6 +10,9 @@ const CORE_ASSETS = [
   INDEX_URL,
   new URL("manifest.webmanifest", SCOPE_URL).toString(),
   new URL("favicon.svg", SCOPE_URL).toString(),
+  new URL("icons/apple-touch-icon-180.png", SCOPE_URL).toString(),
+  new URL("icons/icon-192.png", SCOPE_URL).toString(),
+  new URL("icons/icon-512.png", SCOPE_URL).toString(),
   new URL("version.json", SCOPE_URL).toString(),
   new URL("version.js", SCOPE_URL).toString()
 ];

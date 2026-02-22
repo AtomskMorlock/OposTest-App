@@ -2446,6 +2446,11 @@ body.is-home-screen #main-last-test .streak-flame.is-on {
   opacity: 1;
 }
 
+body.is-home-screen #main-last-test .streak-flame.is-pending {
+  filter: hue-rotate(175deg) saturate(1.75) brightness(0.95);
+  opacity: 0.98;
+}
+
 body.is-home-screen #main-last-test .streak-flame.is-off {
   filter: grayscale(1);
   opacity: 0.46;
@@ -3088,6 +3093,23 @@ body.is-pause-modal-open #app-modal-overlay .modal {
   border-color: color-mix(in srgb, var(--brand) 58%, var(--border)) !important;
 }
 
+#test-menu.bank-theme #bank-filter-category-wrap {
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+#test-menu.bank-theme #bank-filter-category-wrap .fuente-btn {
+  flex: 1 1 0;
+  width: auto !important;
+  min-width: 0;
+  margin: 0 !important;
+  font-size: 0.86rem;
+  white-space: normal;
+  line-height: 1.15;
+  text-align: center;
+}
+
 #test-menu.bank-theme .bank-actions-row {
   margin: 10px 0;
   justify-content: center;
@@ -3102,6 +3124,7 @@ body.is-pause-modal-open #app-modal-overlay .modal {
 #test-menu.bank-theme #bank-back,
 #test-menu.bank-theme #bank-refresh,
 #test-menu.bank-theme #bank-import-questions,
+#test-menu.bank-theme #bank-export-questions,
 #test-menu.bank-theme #bank-trash,
 #test-menu.bank-theme #bank-restore-factory {
   background: var(--surface) !important;
@@ -3117,6 +3140,13 @@ body.is-pause-modal-open #app-modal-overlay .modal {
   background: var(--brand-soft) !important;
   border-color: color-mix(in srgb, var(--brand) 40%, var(--border)) !important;
   margin: 0 0 10px 0;
+}
+
+#test-menu.bank-theme #bank-actions-wrap.bank-actions-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
 }
 
 #test-menu.bank-theme .bank-import-row {

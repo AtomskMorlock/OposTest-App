@@ -1,3 +1,4 @@
+0.7.2 - Mejoras y fixes: racha validada por 5 aciertos diarios (estado pendiente en azul), nuevos filtros/acciones en Banco (usuario, importar/exportar expandible y exportación robusta para móvil), repaso histórico de fallos cuando no hay pendientes, e integración de iconos PWA/iOS con actualización de caché.
 0.7.1 - Fix de repaso Difíciles: botón y subpanel en Home, marcador de bandera en test (blanco/rojo) y ajustes de navegación/estado.
 0.7.0 - Mejoras de UX en Personalizado y Home: barras de progreso visual por tema y global, ajustes de layout/alineación, botones de navegación rápida, y mejoras de interacción para descartar respuestas por gesto.
 0.6.3 - Ajustes de interfaz y correcciones de interacción: flechas en Personalizado, mejoras de marcado por deslizamiento en respuestas y limpieza de contenido de prueba.
